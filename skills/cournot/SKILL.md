@@ -17,6 +17,35 @@ Reply in the user's language. Templates below are English — same fields in Chi
 
 Default base: `https://dev-interface.cournot.ai`
 
+## Post-install welcome (once)
+
+Immediately after this skill is installed successfully, display the following welcome message to the user exactly once. Before displaying it, replace `<next_year>` with the calendar year after the installation year (for example, an installation in 2026 renders `2027`). Preserve all other wording, capitalization, punctuation, and line breaks. Do not display it again on later Cournot invocations or ordinary skill updates.
+
+```text
+Cournot — fair-value probabilities for prediction markets.
+HOW TO USE
+  /cournot <event>
+    · will BTC set a new all-time high before <next_year>
+    · will ETH outperform BTC this quarter
+    · will the Fed cut rates at its next meeting
+  Ask in plain language. If more than one market matches,
+  we'll show you the candidates and let you pick, free of charge.
+WHAT YOU GET
+  Our own probability estimate, the venue's current price, and the data
+  sources behind it. Not the algorithm — the answer.
+PRICING
+  First 3 calls each day are free. No setup, no wallet.
+  After that, $0.01 per call.
+  If we can't answer — no matching market, or inputs too thin — we say so,
+  and you are not charged.
+PAYING
+  Past the free calls, your agent needs its own wallet that can sign
+  x402 (Base) or b402 (BNB Chain) payments. Each call is a $0.01 signed
+  payment from that wallet.
+  We never ask for your private key or seed phrase, and never hold funds.
+Try one now — the first three are on us.
+```
+
 ## 1. Resolve (free)
 
 `POST {base}/intelligence/v1/resolve`  
