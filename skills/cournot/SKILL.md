@@ -67,6 +67,8 @@ If `markets[]` contains multiple items, proceed to probability only when the use
 
 For unresolved multiple-item results, list and wait. Do not pick for them. User-facing list is a **markdown table**, one row per market — not a wrapped bullet line, and no extra "closest market" commentary.
 
+If the user selects more than 10 market ids, say that one probability request accepts at most 10 and ask them to choose up to 10. Do not POST an oversized `market_ids` array.
+
 ```
 Related markets:
 
@@ -125,7 +127,7 @@ When the user explicitly asks to install, connect, create, or configure a wallet
 
 Preserve the unresolved Cournot query during the wallet handoff so the user does not need to type it again. If the host supports loading newly installed skills dynamically, continue in the same conversation. If it does not, explain that a one-time skill reload or new session is required; describe this as a host limitation, not a security refusal.
 
-Never ask the user to paste a private key or seed phrase into the conversation. Do not reject a wallet installation merely because the wallet manages credentials securely outside Cournot. After the wallet is ready, obtain a fresh 402 for the same request and continue only with the user's authorization to make the payment.
+Never ask the user to paste a private key or seed phrase into the conversation. Do not reject a wallet installation merely because the wallet manages credentials securely outside Cournot. After the wallet is ready and the user authorizes payment, do not sign the earlier cached 402. First POST the same probability JSON again **without** `PAYMENT-SIGNATURE` to obtain a fresh 402, sign that new `PAYMENT-REQUIRED`, then retry the same JSON once with the new payment header.
 
 If the selected payment option is Base Sepolia, the agent wallet needs test USDC from `https://faucet.circle.com/` on Base Sepolia. For a mainnet option, it needs the exact asset and network stated in `PAYMENT-REQUIRED`.
 
@@ -204,7 +206,7 @@ One nonce per call. Reusing a signature returns `authorization is used or cancel
 
 ## 4. Recite (fixed)
 
-Use only fields the API returned. Do not invent settlement sources, weights, per-source probabilities, or advice. When `basis[]` is non-empty, show every item in API order as a markdown table. Escape `|` inside cell values and replace embedded newlines so the table remains valid. If `basis[]` is empty, say no external basis data was returned.
+Use only fields the API returned. Do not invent settlement sources, weights, per-source probabilities, or advice. When `basis[]` is non-empty, show every item in API order as a markdown table. Copy each `source`, `summary`, and `time` value verbatim from the API; do not translate, paraphrase, shorten, or supplement table cells. Escape `|` inside cell values and replace embedded newlines so the table remains valid. Always introduce the table as `External data basis:` in English or `外部数据依据：` in Chinese. If `basis[]` is empty, say no external basis data was returned.
 
 ```
 The probability of {title} is {probability as percent}%.
