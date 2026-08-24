@@ -15,7 +15,7 @@ If they asked whether a market is mispriced or priced correctly: Cournot has no 
 
 Reply in the user's language. Templates below are English — same fields in Chinese when the user wrote Chinese. Ignore `/cournot` and API titles when detecting language.
 
-Production API base: `https://interface.cournot.ai`
+API base: `https://dev-interface.cournot.ai`
 
 ## Market title display
 
