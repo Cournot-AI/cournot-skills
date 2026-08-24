@@ -7,9 +7,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  extractWelcome,
   findNewCournotSkillPaths,
   parseSkillList,
+  renderWelcome,
 } from "../lib/welcome.mjs";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -30,7 +30,7 @@ Examples:
 
 The wrapper forwards the source and options to the skills CLI and always uses
 copy mode. A successful fresh Cournot installation prints the welcome message
-from the installed SKILL.md; an overwrite or failed installation does not.`);
+from this wrapper; an overwrite or failed installation does not.`);
 }
 
 if (args.includes("--help") || args.includes("-h")) {
@@ -105,30 +105,7 @@ const afterInstall = exitCode === 0 ? snapshotInstalledSkills() : [];
 const newSkillPaths = findNewCournotSkillPaths(beforeInstall, afterInstall);
 
 if (newSkillPaths.length > 0) {
-  try {
-    let welcome;
-
-    for (const installedPath of newSkillPaths) {
-      try {
-        const skillText = readFileSync(join(installedPath, "SKILL.md"), "utf8");
-        welcome = extractWelcome(skillText);
-        break;
-      } catch {
-        // Try the next newly installed Cournot path.
-      }
-    }
-
-    if (!welcome) {
-      throw new Error("Could not read the welcome block from the installed SKILL.md.");
-    }
-
-    console.log(`\n${welcome}\n`);
-  } catch (error) {
-    console.error(
-      `cournot-skills: the skill was installed, but its welcome message could not be displayed: ${error.message}`
-    );
-    process.exit(1);
-  }
+  console.log(`\n${renderWelcome()}\n`);
 }
 
 process.exit(exitCode);
