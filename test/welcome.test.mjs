@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   extractWelcome,
-  findInstalledSkillPath,
-  shouldShowWelcome,
+  findNewCournotSkillPaths,
+  parseSkillList,
 } from "../lib/welcome.mjs";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -54,65 +54,32 @@ test("the repository SKILL.md contains the installer's welcome source", () => {
   assert.doesNotMatch(welcome, /<next_year>/);
 });
 
-test("shouldShowWelcome accepts a fresh copied Cournot installation", () => {
-  const output = `
-Installed 1 skill
-✓ cournot (copied)
-`;
-
-  assert.equal(shouldShowWelcome(output, 0), true);
+test("parseSkillList accepts the skills CLI JSON output", () => {
+  assert.deepEqual(parseSkillList('[{"name":"cournot","path":"/tmp/cournot"}]'), [
+    { name: "cournot", path: "/tmp/cournot" },
+  ]);
+  assert.throws(() => parseSkillList("{}"), /was not an array/);
 });
 
-test("shouldShowWelcome ignores ANSI escape sequences", () => {
-  const output = "\u001b[32mInstalled 1 skill\u001b[0m\n✓ cournot (copied)";
+test("findNewCournotSkillPaths returns only newly installed paths", () => {
+  const before = [
+    { name: "cournot", path: "/repo/skills/cournot" },
+    { name: "another", path: "/repo/skills/another" },
+  ];
+  const after = [
+    ...before,
+    { name: "cournot", path: "/repo/.agents/skills/cournot" },
+    { name: "cournot", path: "/repo/.claude/skills/cournot" },
+  ];
 
-  assert.equal(shouldShowWelcome(output, 0), true);
+  assert.deepEqual(findNewCournotSkillPaths(before, after), [
+    "/repo/.agents/skills/cournot",
+    "/repo/.claude/skills/cournot",
+  ]);
 });
 
-test("shouldShowWelcome rejects overwrites, failures, and non-install output", () => {
-  assert.equal(
-    shouldShowWelcome(
-      "overwrites: Codex\nInstalled 1 skill\n✓ cournot (copied)",
-      0
-    ),
-    false
-  );
-  assert.equal(
-    shouldShowWelcome("Installed 1 skill\n✓ cournot (copied)", 1),
-    false
-  );
-  assert.equal(shouldShowWelcome("Found 1 skill", 0), false);
-});
+test("findNewCournotSkillPaths treats an overwrite as already installed", () => {
+  const skills = [{ name: "cournot", path: "/repo/.agents/skills/cournot" }];
 
-test("findInstalledSkillPath resolves a project-local Cournot path", () => {
-  const output = `
-Installed 1 skill
-  ✓ cournot (copied)
-│    → ./.agents/skills/cournot  │
-`;
-
-  assert.equal(
-    findInstalledSkillPath(output, "/tmp/example", "/home/example"),
-    "/tmp/example/.agents/skills/cournot"
-  );
-});
-
-test("findInstalledSkillPath expands a global Cournot path", () => {
-  const output = `
-Installed 1 skill
-  ✓ cournot (copied)
-│    → ~/.agents/skills/cournot  │
-`;
-
-  assert.equal(
-    findInstalledSkillPath(output, "/tmp/example", "/home/example"),
-    "/home/example/.agents/skills/cournot"
-  );
-});
-
-test("findInstalledSkillPath rejects output without a Cournot install path", () => {
-  assert.throws(
-    () => findInstalledSkillPath("→ ./.agents/skills/another-skill"),
-    /Could not locate the installed cournot skill directory/
-  );
+  assert.deepEqual(findNewCournotSkillPaths(skills, skills), []);
 });

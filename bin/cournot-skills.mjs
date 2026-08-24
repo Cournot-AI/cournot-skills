@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   extractWelcome,
-  findInstalledSkillPath,
-  shouldShowWelcome,
+  findNewCournotSkillPaths,
+  parseSkillList,
 } from "../lib/welcome.mjs";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -54,24 +54,44 @@ const require = createRequire(import.meta.url);
 const skillsPackageRoot = dirname(require.resolve("skills/package.json"));
 const skillsCli = join(skillsPackageRoot, "bin", "cli.mjs");
 const forwardedOptions = options.filter((option) => option !== "--copy");
+
+function listInstalledSkills(extraArgs = []) {
+  const listed = spawnSync(
+    process.execPath,
+    [skillsCli, "list", ...extraArgs, "--json"],
+    {
+      cwd: process.cwd(),
+      env: process.env,
+      encoding: "utf8",
+      maxBuffer: 10 * 1024 * 1024,
+    }
+  );
+
+  if (listed.status !== 0 || listed.error) {
+    return [];
+  }
+
+  try {
+    return parseSkillList(listed.stdout);
+  } catch {
+    return [];
+  }
+}
+
+function snapshotInstalledSkills() {
+  return [...listInstalledSkills(), ...listInstalledSkills(["--global"])];
+}
+
+const beforeInstall = snapshotInstalledSkills();
 const result = spawnSync(
   process.execPath,
   [skillsCli, "add", source, "--copy", ...forwardedOptions],
   {
     cwd: process.cwd(),
     env: process.env,
-    encoding: "utf8",
-    maxBuffer: 10 * 1024 * 1024,
+    stdio: "inherit",
   }
 );
-
-if (result.stdout) {
-  process.stdout.write(result.stdout);
-}
-
-if (result.stderr) {
-  process.stderr.write(result.stderr);
-}
 
 if (result.error) {
   console.error(
@@ -81,13 +101,28 @@ if (result.error) {
 }
 
 const exitCode = result.status ?? 1;
-const installerOutput = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+const afterInstall = exitCode === 0 ? snapshotInstalledSkills() : [];
+const newSkillPaths = findNewCournotSkillPaths(beforeInstall, afterInstall);
 
-if (shouldShowWelcome(installerOutput, exitCode)) {
+if (newSkillPaths.length > 0) {
   try {
-    const installedPath = findInstalledSkillPath(installerOutput);
-    const skillText = readFileSync(join(installedPath, "SKILL.md"), "utf8");
-    console.log(`\n${extractWelcome(skillText)}\n`);
+    let welcome;
+
+    for (const installedPath of newSkillPaths) {
+      try {
+        const skillText = readFileSync(join(installedPath, "SKILL.md"), "utf8");
+        welcome = extractWelcome(skillText);
+        break;
+      } catch {
+        // Try the next newly installed Cournot path.
+      }
+    }
+
+    if (!welcome) {
+      throw new Error("Could not read the welcome block from the installed SKILL.md.");
+    }
+
+    console.log(`\n${welcome}\n`);
   } catch (error) {
     console.error(
       `cournot-skills: the skill was installed, but its welcome message could not be displayed: ${error.message}`
