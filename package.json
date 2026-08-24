@@ -1,6 +1,6 @@
 {
   "name": "cournot-skills",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Install the Cournot agent skill and show its welcome message after a successful fresh installation.",
   "type": "module",
   "bin": {
