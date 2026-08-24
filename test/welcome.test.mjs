@@ -4,7 +4,11 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { extractWelcome, shouldShowWelcome } from "../lib/welcome.mjs";
+import {
+  extractWelcome,
+  findInstalledSkillPath,
+  shouldShowWelcome,
+} from "../lib/welcome.mjs";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -35,7 +39,7 @@ test("extractWelcome fails when the source block is missing", () => {
   );
 });
 
-test("the bundled SKILL.md contains the installer's welcome source", () => {
+test("the repository SKILL.md contains the installer's welcome source", () => {
   const skill = readFileSync(
     join(packageRoot, "skills", "cournot", "SKILL.md"),
     "utf8"
@@ -78,4 +82,37 @@ test("shouldShowWelcome rejects overwrites, failures, and non-install output", (
     false
   );
   assert.equal(shouldShowWelcome("Found 1 skill", 0), false);
+});
+
+test("findInstalledSkillPath resolves a project-local Cournot path", () => {
+  const output = `
+Installed 1 skill
+  ✓ cournot (copied)
+│    → ./.agents/skills/cournot  │
+`;
+
+  assert.equal(
+    findInstalledSkillPath(output, "/tmp/example", "/home/example"),
+    "/tmp/example/.agents/skills/cournot"
+  );
+});
+
+test("findInstalledSkillPath expands a global Cournot path", () => {
+  const output = `
+Installed 1 skill
+  ✓ cournot (copied)
+│    → ~/.agents/skills/cournot  │
+`;
+
+  assert.equal(
+    findInstalledSkillPath(output, "/tmp/example", "/home/example"),
+    "/home/example/.agents/skills/cournot"
+  );
+});
+
+test("findInstalledSkillPath rejects output without a Cournot install path", () => {
+  assert.throws(
+    () => findInstalledSkillPath("→ ./.agents/skills/another-skill"),
+    /Could not locate the installed cournot skill directory/
+  );
 });

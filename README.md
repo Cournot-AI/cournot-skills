@@ -7,13 +7,13 @@ Cournot gives AI agents fair-value probability estimates for prediction markets,
 Install the Cournot skill with its dedicated installer:
 
 ```bash
-npx cournot-skill
+npx cournot-skills add Cournot-AI/cournot-skills/skills/cournot
 ```
 
-The installer detects supported agents such as Codex and Claude Code and lets you choose where to install the skill. After a successful fresh installation, it prints the Cournot welcome message directly from the bundled `SKILL.md`. To install it globally without prompts for Codex:
+The installer detects supported agents such as Codex and Claude Code and lets you choose where to install the skill. After a successful fresh installation, it reads the installed `SKILL.md` and prints the Cournot welcome message. To install it globally without prompts for Codex:
 
 ```bash
-npx cournot-skill --global --agent codex --yes
+npx cournot-skills add Cournot-AI/cournot-skills/skills/cournot --global --agent codex --yes
 ```
 
 Prerequisite: Node.js 22.20 or newer with `npx` available.
@@ -24,7 +24,7 @@ The generic skills installer remains available as a fallback:
 npx skills add Cournot-AI/cournot-skills/skills/cournot
 ```
 
-The generic installer does not guarantee that an agent will display the post-install welcome message. Use `npx cournot-skill` when that handoff is required. The welcome copy lives only in `SKILL.md`, and the dedicated installer extracts it from there so the product copy has a single source of truth.
+The generic installer does not guarantee that an agent will display the post-install welcome message. Use `npx cournot-skills add` when that handoff is required. The welcome copy lives only in the installed `SKILL.md`, and the dedicated installer extracts it from there so the product copy has a single source of truth.
 
 ## Usage
 
@@ -72,7 +72,7 @@ The npm wrapper bundles the Cournot skill, invokes the pinned `skills` CLI with 
 
 ```text
 ├── bin/
-│   └── cournot-skill.mjs
+│   └── cournot-skills.mjs
 ├── lib/
 │   └── welcome.mjs
 ├── skills/
