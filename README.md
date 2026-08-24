@@ -4,34 +4,27 @@ Cournot gives AI agents fair-value probability estimates for prediction markets,
 
 ## Installation
 
-Install the Cournot skill with one command:
+Install the Cournot skill with its dedicated installer:
+
+```bash
+npx cournot-skill
+```
+
+The installer detects supported agents such as Codex and Claude Code and lets you choose where to install the skill. After a successful fresh installation, it prints the Cournot welcome message directly from the bundled `SKILL.md`. To install it globally without prompts for Codex:
+
+```bash
+npx cournot-skill --global --agent codex --yes
+```
+
+Prerequisite: Node.js 22.20 or newer with `npx` available.
+
+The generic skills installer remains available as a fallback:
 
 ```bash
 npx skills add Cournot-AI/cournot-skills/skills/cournot
 ```
 
-The installer detects supported agents such as Codex and Claude Code and lets you choose where to install the skill. To install it globally without prompts for Codex:
-
-```bash
-npx skills add Cournot-AI/cournot-skills/skills/cournot --global --agent codex --yes
-```
-
-Prerequisite: Node.js with `npx` available.
-
-### Required handoff for AI agents
-
-If you are Codex, Claude Code, or another AI agent running the installation on the user's behalf, the task is **not complete** when the installer only reports the installed path. After a successful fresh installation, you must print the full Cournot welcome message in the same response:
-
-1. Wait for the installer to report that `cournot` was installed successfully.
-2. Open the installed `SKILL.md` at the path reported by the installer; do not wait for the skill to become active in the next conversation.
-3. Find **Post-install welcome (once)** and replace `<next_year>` with the calendar year after the installation year.
-4. Print the complete welcome message verbatim, preserving its wording, capitalization, punctuation, and line breaks.
-
-Do not respond with only the installation path or “the skill will be available next turn.” Reading the newly installed file and printing its welcome message does not require activating the skill.
-
-Print the welcome only after a successful fresh installation. Do not print it after a failed installation, `--list`, an update, or an ordinary Cournot invocation.
-
-The welcome message lives only in `SKILL.md` so its product copy has a single source of truth.
+The generic installer does not guarantee that an agent will display the post-install welcome message. Use `npx cournot-skill` when that handoff is required. The welcome copy lives only in `SKILL.md`, and the dedicated installer extracts it from there so the product copy has a single source of truth.
 
 ## Usage
 
@@ -75,13 +68,19 @@ Cournot never asks for a private key or seed phrase and never holds user funds. 
 
 ## Repository Structure
 
-Each skill lives under `skills/` and contains a `SKILL.md` file with YAML frontmatter and the instructions used by compatible agents.
+The npm wrapper bundles the Cournot skill, invokes the pinned `skills` CLI with copy mode, and prints the welcome text only after a fresh successful installation.
 
 ```text
-skills/
-└── cournot/
-    ├── SKILL.md
-    └── evals/
+├── bin/
+│   └── cournot-skill.mjs
+├── lib/
+│   └── welcome.mjs
+├── skills/
+│   └── cournot/
+│       ├── SKILL.md
+│       └── evals/
+└── test/
+    └── welcome.test.mjs
 ```
 
 ## Disclaimer
