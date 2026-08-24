@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cournot"
+  short_description: "Query prediction-market probabilities with Cournot"
+  default_prompt: "Use $cournot to query the requested event probability."
