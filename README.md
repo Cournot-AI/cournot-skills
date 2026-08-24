@@ -18,6 +18,19 @@ npx skills add Cournot-AI/cournot-skills/skills/cournot --global --agent codex -
 
 Prerequisite: Node.js with `npx` available.
 
+### Note for installing agents
+
+When an AI agent installs this skill on the user's behalf, it must complete the following installation handoff:
+
+1. Wait until the installer reports that the `cournot` skill was installed successfully.
+2. Read `skills/cournot/SKILL.md`, section **Post-install welcome (once)**.
+3. Replace `<next_year>` with the calendar year after the installation year.
+4. Display that welcome message to the user once, preserving its wording and formatting.
+
+Do not display the welcome message after a failed installation, a `--list` operation, an update, or an ordinary Cournot invocation.
+
+The welcome message lives only in `SKILL.md` so its product copy has a single source of truth.
+
 ## Usage
 
 Ask Cournot about a prediction-market event in plain language:
