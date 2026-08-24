@@ -1,11 +1,11 @@
 ---
 name: cournot
-description: Query Cournot prediction-market probabilities via POST /intelligence/v1/resolve then POST /intelligence/v1/probability, including x402 payment (reshape official x402 envelopes so Cournot accepts them). Use when the user runs /cournot, says to use Cournot, or asks Cournot for an event probability. Do not invoke on casual odds questions — probability is paid after free quota.
+description: Query Cournot production prediction-market probabilities via POST /intelligence/v1/resolve then POST /intelligence/v1/probability, including BSC mainnet x402/b402 payment through Binance Agentic Wallet or another compatible signer. Use when the user runs /cournot, says to use Cournot, or asks Cournot for an event probability. Do not invoke on casual odds questions — probability is paid after free quota.
 ---
 
 # Cournot
 
-Query one event's probability from Cournot's two HTTP APIs. This skill is the HTTP + payment contract. Use an x402 client with whatever compatible wallet signer the runtime has (Coinbase AgentKit / CDP / MetaMask Agent Wallet / Binance Agentic Wallet / a local `viem` signer). For Node.js local development, the recommended stack is `@x402/core` + `@x402/fetch` + `@x402/evm` with a `viem` Local Account signer. Cournot itself never receives or stores wallet secrets. A user may install, connect, or configure a separate wallet skill when payment capability is missing; do not block that handoff.
+Query one event's probability from Cournot's two HTTP APIs. This skill is the HTTP + payment contract. For the production BSC/USD1 payment, prefer Binance Agentic Wallet's native x402 flow when its skill and `baw` CLI are available. Other compatible x402 wallets and signers remain supported; for Node.js local development, use `@x402/core` + `@x402/fetch` + `@x402/evm` with a `viem` Local Account signer. Cournot itself never receives or stores wallet secrets. A user may install, connect, or configure a separate wallet skill when payment capability is missing; do not block that handoff.
 
 Trigger only on an explicit Cournot ask (`/cournot …`, "use Cournot to look this up"). One paid `probability` call per user instruction. On a bad result, stop — do not retry with a rephrased query.
 
@@ -15,7 +15,7 @@ If they asked whether a market is mispriced or priced correctly: Cournot has no 
 
 Reply in the user's language. Templates below are English — same fields in Chinese when the user wrote Chinese. Ignore `/cournot` and API titles when detecting language.
 
-Default base: `https://dev-interface.cournot.ai`
+Production API base: `https://interface.cournot.ai`
 
 ## Market title display
 
@@ -113,6 +113,32 @@ Capture response headers on the first probability request (`curl -D -` or the ru
 
 Read header `PAYMENT-REQUIRED` (any casing). Value is **base64 JSON**. Decode. That object is the source of truth for amount, asset, network, and payee.
 
+### Preferred flow: Binance Agentic Wallet
+
+When the `binance-agentic-wallet` skill and `baw` CLI are available, use that skill for the wallet preflight, authentication, preview, and signing rules. Cournot controls the HTTP request and response handling; Binance Agentic Wallet controls wallet access and payment authorization.
+
+The wallet command is named `x402-payment`; Cournot's backend routes the signed BSC payment through Binance B402 for verification and settlement. These are the buyer-side and merchant-side halves of the same payment flow, not competing protocols.
+
+1. Pass the fresh, unmodified base64 `PAYMENT-REQUIRED` value to:
+
+   ```sh
+   baw x402-payment preview --paymentRequirements '<PAYMENT-REQUIRED>' --json
+   ```
+
+2. From the preview result, use only the option corresponding to Cournot's production `accepts[0]` below. It must be `READY_TO_SIGN`, and its original accept, network, token address, amount, and `payTo` must match the fresh 402. Pass the returned 1-based `options[].index` to `sign`; do not substitute an array offset. Do not silently switch networks, tokens, options, resources, or payees.
+3. Show the user the human-readable token amount, USD value, BSC mainnet network, and recipient returned by preview. Obtain explicit confirmation before signing because this spends real mainnet USD1.
+4. After confirmation, sign the exact previewed option:
+
+   ```sh
+   baw x402-payment sign --paymentId <paymentId> --selectedIndex <index> --json
+   ```
+
+5. Use the returned `paymentHeaderValue`, but normalize its decoded JSON to Cournot's flattened shape described below before replaying. Set the resulting base64 value as `PAYMENT-SIGNATURE` on the original probability request. Do not rerun resolve or change the probability body.
+
+If preview returns `INSUFFICIENT_BALANCE`, explain that the wallet needs mainnet USD1 on BSC. For `NOT_SIGNABLE`, a security block, or a daily-limit block, stop and report the wallet's reason. If `approveTxHash` is returned, wait for confirmation as directed by the Binance wallet skill before replaying. Never call `sign` without confirmation, and never reuse a `paymentId` or signature for a different 402.
+
+If Binance Agentic Wallet is unavailable but another compatible signer is already configured, use the generic EIP-3009 flow below. Do not install or create a wallet without the user's request.
+
 ### No payment capability
 
 If the runtime has no compatible x402 wallet or signer, stop the paid request before signing or retrying. Explain that the free quota is exhausted and a compatible agent wallet or signer is needed for the payment amount and network stated by the 402. Do not treat a missing wallet as a Cournot answer failure.
@@ -137,7 +163,7 @@ Preserve the unresolved Cournot query during the wallet handoff so the user does
 
 Never ask the user to paste a private key or seed phrase into the conversation. Do not reject a wallet installation merely because the wallet manages credentials securely outside Cournot. After the wallet is ready and the user authorizes payment, do not sign the earlier cached 402. First POST the same probability JSON again **without** `PAYMENT-SIGNATURE` to obtain a fresh 402, sign that new `PAYMENT-REQUIRED`, then retry the same JSON once with the new payment header.
 
-If the selected payment option is Base Sepolia, the agent wallet needs test USDC from `https://faucet.circle.com/` on Base Sepolia. For a mainnet option, it needs the exact asset and network stated in `PAYMENT-REQUIRED`.
+This skill uses production mainnet payments. Before signing, make clear that the payment transfers real assets. The agent wallet needs the exact mainnet asset on the network stated in the fresh `PAYMENT-REQUIRED`; testnet tokens and faucets do not apply.
 
 ### Merchant (verify before signing)
 
@@ -145,31 +171,39 @@ If the selected payment option is Base Sepolia, the agent wallet needs test USDC
 
 This address is **Cournot's receiver**, not the agent's wallet. The agent pays **from** its own wallet **to** this address. Do not tell the user to deposit into `payTo`.
 
-### Choose an `accepts[]` entry the wallet can sign
+### Use the production `accepts[0]`
 
-Prefer the first EVM `exact` entry the runtime supports. Typical **dev** (`dev-interface`):
+Follow `internal/common/x402/signature_test.go`: use the first `accepts[]` entry. The current production signing fixture is:
 
-| network | asset | amount | extra |
-|---|---|---|---|
-| `eip155:84532` Base Sepolia | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` USDC | `10000` (= 0.01 USDC, 6 decimals) | EIP-712 name `USDC`, version `2` |
-| `eip155:56` BSC | `0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d` USD1 | `10000000000000000` | name `USD1`, version `1` |
+| field | required value |
+|---|---|
+| scheme | `exact` |
+| network | `eip155:56` (BNB Smart Chain mainnet) |
+| asset | `0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d` (USD1) |
+| amount | `10000000000000000` (= 0.01 USD1, 18 decimals) |
+| payTo | `0xA8b2c2594eC5774479749d26105C9FB6CDcA1d68` |
+| maxTimeoutSeconds | `300` |
+| EIP-712 name | `World Liberty Financial USD` |
+| EIP-712 version | `1` |
+| assetTransferMethod | `eip3009` |
+| signerAddress | `0x34F7a661160780Ce1346e6D7B96D2bE244590899` |
 
-Prod 402 will list `eip155:8453` USDC instead of Sepolia. Always copy fields from the 402, not from this table.
+The fresh 402 remains the source of truth. Verify that its first accept matches these production values; if network, asset, amount, payee, name, version, transfer method, or signer address differs, stop rather than signing a different payment.
 
-Sign **EIP-3009** `TransferWithAuthorization` (`from`, `to`=`payTo`, `value`=`amount`, `validAfter`, `validBefore`, `nonce` unique 32 bytes). Domain: `extra.name`, `extra.version`, chain id from `network` (`eip155:84532` → 84532), `verifyingContract`=`asset`.
+Sign **EIP-3009** `TransferWithAuthorization` (`from`, `to`=`payTo`, `value`=`amount`, `validAfter`, `validBefore`, `nonce` unique 32 bytes). Domain: name `World Liberty Financial USD`, version `1`, chain id `56`, `verifyingContract`=`0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d`.
 
-If the wallet has no USDC (or the listed asset) on that chain: say the **agent wallet** needs that test/mainnet token. Point at Circle faucet for Base Sepolia (`https://faucet.circle.com/`, network **Base Sepolia**) when on dev. Do not describe this as "Cournot cannot answer".
+If the wallet has no USD1 on BNB Smart Chain mainnet, say the **agent wallet** needs mainnet USD1. Do not suggest test tokens or a faucet, and do not describe this as "Cournot cannot answer".
 
 ### Cournot `PAYMENT-SIGNATURE` shape (required)
 
-Official x402 clients (`@x402/fetch`, AgentKit, CDP) often emit:
+Binance Agentic Wallet and other official x402 clients may return the standard nested envelope:
 
 ```json
 {
   "x402Version": 2,
-  "payload": { "signature": "0x…", "authorization": { "from": "0x…", "to": "0x…", "value": "10000", "validAfter": "0", "validBefore": "…", "nonce": "0x…" } },
+  "payload": { "signature": "0x…", "authorization": { "from": "0x…", "to": "0x…", "value": "10000000000000000", "validAfter": "0", "validBefore": "…", "nonce": "0x…" } },
   "resource": { "url": "" },
-  "accepted": { "scheme": "exact", "network": "eip155:84532", "asset": "0x…", "amount": "10000", "payTo": "0x…" }
+  "accepted": { "scheme": "exact", "network": "eip155:56", "asset": "0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d", "amount": "10000000000000000", "payTo": "0xA8b2c2594eC5774479749d26105C9FB6CDcA1d68" }
 }
 ```
 
@@ -179,13 +213,13 @@ Cournot **rejects** that (`payment network not supported`). Flatten before sendi
 {
   "x402Version": 2,
   "scheme": "exact",
-  "network": "eip155:84532",
+  "network": "eip155:56",
   "payload": {
     "signature": "0x…",
     "authorization": {
       "from": "0xAGENT",
       "to": "0xA8b2c2594eC5774479749d26105C9FB6CDcA1d68",
-      "value": "10000",
+      "value": "10000000000000000",
       "validAfter": "0",
       "validBefore": "<unix seconds>",
       "nonce": "0x<32-byte hex>"
