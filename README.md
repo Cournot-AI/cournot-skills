@@ -18,16 +18,18 @@ npx skills add Cournot-AI/cournot-skills/skills/cournot --global --agent codex -
 
 Prerequisite: Node.js with `npx` available.
 
-### Note for installing agents
+### Required handoff for AI agents
 
-When an AI agent installs this skill on the user's behalf, it must complete the following installation handoff:
+If you are Codex, Claude Code, or another AI agent running the installation on the user's behalf, the task is **not complete** when the installer only reports the installed path. After a successful fresh installation, you must print the full Cournot welcome message in the same response:
 
-1. Wait until the installer reports that the `cournot` skill was installed successfully.
-2. Read `skills/cournot/SKILL.md`, section **Post-install welcome (once)**.
-3. Replace `<next_year>` with the calendar year after the installation year.
-4. Display that welcome message to the user once, preserving its wording and formatting.
+1. Wait for the installer to report that `cournot` was installed successfully.
+2. Open the installed `SKILL.md` at the path reported by the installer; do not wait for the skill to become active in the next conversation.
+3. Find **Post-install welcome (once)** and replace `<next_year>` with the calendar year after the installation year.
+4. Print the complete welcome message verbatim, preserving its wording, capitalization, punctuation, and line breaks.
 
-Do not display the welcome message after a failed installation, a `--list` operation, an update, or an ordinary Cournot invocation.
+Do not respond with only the installation path or “the skill will be available next turn.” Reading the newly installed file and printing its welcome message does not require activating the skill.
+
+Print the welcome only after a successful fresh installation. Do not print it after a failed installation, `--list`, an update, or an ordinary Cournot invocation.
 
 The welcome message lives only in `SKILL.md` so its product copy has a single source of truth.
 
