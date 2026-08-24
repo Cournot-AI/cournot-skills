@@ -101,7 +101,7 @@ Reply with an id to query that market's probability. After the free quota is use
 
 Send only the chosen ids (often one). `message` still required.
 
-Success `code=0`: use `data.probability`, `data.markets`, `data.basis[]` (`source`, `summary`, `time`), `data.charged`, `data.free_quota`, and `data.x402` when charged. `basis[]` is external data returned by the API, not a rationale to generate or supplement.
+Success `code=0`: use `data.probability` and/or `data.result`, `data.markets`, `data.basis`, `data.charged`, `data.free_quota`, and `data.x402` when charged. If `data.probability` is itself an object containing `result` or `basis`, use those nested fields; otherwise use the sibling `data.result` and `data.basis` fields. Production `basis` is a structured object; older responses may return an array of `{source, summary, time}` instead. The API's `basis` is the related evidence for the assessment, not a rationale to replace, regenerate, or supplement.
 
 Capture response headers on the first probability request (`curl -D -` or the runtime equivalent), because payment requirements arrive in a header. If that request returns HTTP **402** + empty body, pay once (below) and retry the **same** JSON with `PAYMENT-SIGNATURE`. Never send a second unsigned probability request merely to recover headers; no second payment attempt on the same nonce.
 
@@ -248,17 +248,60 @@ One nonce per call. Reusing a signature returns `authorization is used or cancel
 
 ## 4. Recite (fixed)
 
-Use only fields the API returned. Do not invent settlement sources, weights, per-source probabilities, or advice. When `basis[]` is non-empty, show every item in API order as a markdown table. Copy each `source`, `summary`, and `time` value verbatim from the API; do not translate, paraphrase, shorten, or supplement table cells. Escape `|` inside cell values and replace embedded newlines so the table remains valid. Always introduce the table as `External data basis:` in English or `外部数据依据：` in Chinese. If `basis[]` is empty, say no external basis data was returned.
+Use only fields the API returned. Do not browse for more evidence, produce a separate subjective estimate, or invent settlement sources, weights, scenarios, per-source probabilities, links, or advice. In particular, never replace Cournot's response with wording such as "my subjective probability." The API result is the answer.
+
+If `result` is present, use its returned fields for the assessment summary. Prefer `result.point_estimate` for the headline estimate; do not derive a different estimate from `basis`. Display all returned `result` fields in one markdown table, with only the columns actually returned. Render probability decimals as percentages while preserving their exact meaning: `0.035` → `3.5%`, `[0.02, 0.06]` → `2%–6%`. Leave enum strings such as `unlikely` unchanged.
+
+Whenever `basis` is present and non-empty, displaying it is mandatory. Introduce it as `External data basis:` in English or `外部数据依据：` in Chinese, then render every returned field in API order as markdown tables. Do not omit a section or move its content into prose. Include only fields the API returned; do not fill absent template columns with invented values. Field names may remain as API keys; copy string values verbatim without translating, paraphrasing, shortening, or supplementing them. Escape `|` inside cells and replace embedded newlines so every table remains valid.
+
+For the production structured object, render each present section separately:
+
+- `primary_anchor`: one table with its returned keys as columns and one row of values.
+- `price_distance`: one table with its returned keys as columns and one row of values.
+- `cross_checks`: one table with the union of returned item keys as columns and one row per item, preserving array order.
+- `limitations`: a one-column `limitation` table with one row per item, preserving array order.
+
+Format probability and return decimals with their percentage equivalents, and USD fields with readable separators, without changing the underlying value. For example, `displayed_probability: 0.03` renders as `3%`, `required_return: 0.8993` as `89.93%`, and `volume_usd: 2813626` as `$2,813,626`. Do not interpret a price target as a probability.
+
+The schema may gain additional `basis` sections or fields. Never drop them: render an unrecognized array of objects as a table using the union of its keys; render an unrecognized scalar array as a one-column table; render any other nested object as a `path | value` table with one row per scalar leaf.
+
+For an older non-empty `basis[]`, show every item in API order in the legacy `source | summary | time` table, copying those values verbatim. If `basis` is absent, null, an empty object, or an empty array, say no external basis data was returned.
 
 ```
-The probability of {display-normalized title} is {probability as percent}%.
+The probability of {display-normalized title} is {point_estimate or probability as percent}%.
 Reference market: {display-normalized title} ({market_outcome} {market_outcome_price as ¢}).
+
+Cournot assessment:
+
+| market_implied_probability | defensible_range | point_estimate | verdict |
+|---|---|---|---|
+| {market_implied_probability} | {defensible_range} | {point_estimate} | {verdict} |
 
 External data basis:
 
-| source | summary | time |
+Primary anchor:
+
+| type | source | event | displayed_probability | yes_ask | volume_usd | reason |
+|---|---|---|---|---|---|---|
+| {type} | {source} | {event} | {displayed_probability} | {yes_ask} | {volume_usd} | {reason} |
+
+Price distance:
+
+| btc_spot | target | days_remaining | required_return |
+|---|---|---|---|
+| {btc_spot} | {target} | {days_remaining} | {required_return} |
+
+Cross-checks:
+
+| source | year_end_target | signal |
 |---|---|---|
-| {source} | {summary} | {time} |
+| {source} | {year_end_target} | {signal} |
+
+Limitations:
+
+| limitation |
+|---|
+| {limitation} |
 
 This query was {not charged / charged on-chain txn_hash} (free quota remaining/total). This is an assessment of pricing, not investment advice.
 ```
