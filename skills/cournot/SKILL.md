@@ -5,7 +5,7 @@ description: Query Cournot prediction-market probabilities via POST /intelligenc
 
 # Cournot
 
-Query one event's probability from Cournot's two HTTP APIs. This skill is the HTTP + payment contract. Sign with whatever compatible wallet the runtime has (Coinbase AgentKit / CDP / `@x402/fetch` / MetaMask Agent Wallet / Binance Agentic Wallet / a local signer). Cournot itself never receives or stores wallet secrets. A user may install, connect, or configure a separate wallet skill when payment capability is missing; do not block that handoff.
+Query one event's probability from Cournot's two HTTP APIs. This skill is the HTTP + payment contract. Use an x402 client with whatever compatible wallet signer the runtime has (Coinbase AgentKit / CDP / MetaMask Agent Wallet / Binance Agentic Wallet / a local `viem` signer). For Node.js local development, the recommended stack is `@x402/core` + `@x402/fetch` + `@x402/evm` with a `viem` Local Account signer. Cournot itself never receives or stores wallet secrets. A user may install, connect, or configure a separate wallet skill when payment capability is missing; do not block that handoff.
 
 Trigger only on an explicit Cournot ask (`/cournot …`, "use Cournot to look this up"). One paid `probability` call per user instruction. On a bad result, stop — do not retry with a rephrased query.
 
@@ -119,14 +119,17 @@ If the runtime has no compatible x402 wallet or signer, stop the paid request be
 
 Do not automatically install software or create a wallet merely because a 402 was returned. Offer the user a choice: install/connect a compatible wallet, or stop without paying. Any x402 v2 client or wallet that supports the payment option returned by Cournot is acceptable.
 
-The reply must include concrete next steps; do not say only "install a compatible wallet." Always show both official entries below, with equivalent labels in the user's language:
+The reply must include concrete next steps; do not say only "install a compatible wallet." Always show all three official entries below, with equivalent labels in the user's language:
 
 - Recommended agent wallet — Binance Agentic Wallet: `https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet`
 - Official developer SDK — x402 Foundation Buyer Quickstart: `https://docs.x402.org/getting-started/quickstart-for-buyers`
+- Recommended Node.js local signer — viem Local Accounts: `https://viem.sh/docs/accounts/local`
 
-Explain that Binance Agentic Wallet is the recommended option for an agent that does not yet have a wallet. The x402 Foundation SDK is the standard integration option for a developer runtime that already has an EVM wallet or signer; it is not itself a wallet and still requires a signer.
+Explain that Binance Agentic Wallet is the recommended complete option for an agent that does not yet have a wallet. The x402 Foundation SDK handles the payment protocol but is not itself a wallet or signer. For Node.js development, recommend pairing that SDK with a `viem` Local Account signer; the complete dependency set is `@x402/core`, `@x402/fetch`, `@x402/evm`, and `viem`. `viem` signs locally but does not provide secure key custody, wallet funding, or secret management.
 
-End the no-wallet reply by asking whether the user wants the agent to install the recommended wallet and then resume the preserved Cournot query, connect another compatible wallet, or stop without paying. Include the warning not to paste a private key or seed phrase into the conversation.
+Treat `viem` as the recommended **local development signer**, not the universal production default. It needs an existing private key supplied outside the conversation, preferably through a secret manager or a local environment variable. Never ask the user to paste it, write it into source, print it, or commit it. Do not automatically generate or persist a raw private key merely because the SDK was installed. For production or valuable funds, prefer a managed/isolated agent wallet or signing service that supports EIP-712 `signTypedData` without exposing the raw key.
+
+End the no-wallet reply by asking whether the user wants the agent to install the recommended agent wallet, set up the x402 SDK with the recommended local `viem` signer, connect another compatible wallet/signer, or stop without paying. Preserve the Cournot query for resumption. Include the warning not to paste a private key or seed phrase into the conversation.
 
 When the user explicitly asks to install Binance Agentic Wallet, allow the appropriate installer or wallet skill to handle that workflow in the same conversation, subject to its own confirmations and security rules. The standard installation command is `npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wallet`; show or run it only after that explicit request. This is not a request for Cournot to possess the wallet.
 
