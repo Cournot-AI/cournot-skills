@@ -5,46 +5,15 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  extractWelcome,
   findNewCournotSkillPaths,
   parseSkillList,
+  renderWelcome,
 } from "../lib/welcome.mjs";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
-test("extractWelcome reads the fenced welcome and replaces next_year", () => {
-  const skill = `
-## Post-install welcome (once)
-
-Instructions that are not part of the welcome.
-
-\`\`\`text
-Welcome.
-Try before <next_year>.
-\`\`\`
-
-## Next section
-`;
-
-  assert.equal(
-    extractWelcome(skill, new Date(2026, 7, 24)),
-    "Welcome.\nTry before 2027."
-  );
-});
-
-test("extractWelcome fails when the source block is missing", () => {
-  assert.throws(
-    () => extractWelcome("# Cournot"),
-    /Could not find the Post-install welcome/
-  );
-});
-
-test("the repository SKILL.md contains the installer's welcome source", () => {
-  const skill = readFileSync(
-    join(packageRoot, "skills", "cournot", "SKILL.md"),
-    "utf8"
-  );
-  const welcome = extractWelcome(skill, new Date(2026, 7, 24));
+test("renderWelcome replaces next_year in the wrapper-owned template", () => {
+  const welcome = renderWelcome(new Date(2026, 7, 24));
 
   assert.match(
     welcome,
@@ -52,6 +21,22 @@ test("the repository SKILL.md contains the installer's welcome source", () => {
   );
   assert.match(welcome, /before 2027/);
   assert.doesNotMatch(welcome, /<next_year>/);
+});
+
+test("the skill fallback welcome matches the wrapper welcome", () => {
+  const skill = readFileSync(
+    join(packageRoot, "skills", "cournot", "SKILL.md"),
+    "utf8"
+  );
+  const match = skill.match(
+    /## Post-install welcome \(once\)[\s\S]*?```text\r?\n([\s\S]*?)\r?\n```/
+  );
+
+  assert.ok(match, "SKILL.md must contain the fallback welcome block");
+  assert.equal(
+    match[1].replaceAll("<next_year>", "2027"),
+    renderWelcome(new Date(2026, 7, 24))
+  );
 });
 
 test("parseSkillList accepts the skills CLI JSON output", () => {

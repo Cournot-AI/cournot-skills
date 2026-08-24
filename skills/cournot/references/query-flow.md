@@ -1,0 +1,63 @@
+# Query flow
+
+Use this flow for every Cournot query. The API base is defined in `SKILL.md`.
+
+## Market title display
+
+Normalize every API-provided market `title` only when rendering it to the user, both in resolve candidate tables and probability results. Keep the original title and market id unchanged for API handling.
+
+- Remove the phrase `at any time` and clean up the surrounding space.
+- Render a timestamp written as `YYYY-MM-DD HH:MM UTC` as `Month D, YYYY`, using the English month name, no leading zero on the day, and no hour or timezone. Use the calendar date as written; do not convert it through the user's local timezone.
+- Leave all other title wording unchanged.
+
+Example: `Bitcoin price above $80,000 at any time before 2026-11-02 04:59 UTC` → `Bitcoin price above $80,000 before November 2, 2026`.
+
+## Resolve (free)
+
+`POST {base}/intelligence/v1/resolve`  
+`Content-Type: application/json`
+
+```json
+{"message": "<user's event in their own words>", "limit": 5}
+```
+
+`message` is required. `limit` defaults to 5 and has a maximum of 10.
+
+Success is `code=0`. `data.markets[]` contains `matching_confidence` and `market_info` (`id`, `title`, `description`, `start_time`, `end_time`, `market_outcome`, `market_outcome_price`). `charged` is always false.
+
+- Empty `markets`: tell the user no market matched, suggest a more specific claim (asset, threshold, date), and stop.
+- Exactly one item: treat it as resolved and immediately call probability with its `market_info.id`. Do not list it or ask the user to send its id, regardless of `matching_confidence`.
+- Multiple items: proceed only when the user picked ids, or the leading market has confidence at least 0.85 and leads the next by at least 0.15. Keep these cutoffs internal.
+- More than 10 selected ids: say one probability request accepts at most 10 and ask the user to choose up to 10. Do not send an oversized array.
+- `code=4100`: show `msg` and stop.
+
+For unresolved multiple-item results, list every market in a markdown table and wait. Do not pick for the user or add “closest market” commentary.
+
+```text
+Related markets:
+
+| id | title |
+|---|---|
+| {id} | {display-normalized title} |
+
+Reply with an id to query that market's probability. After the free quota is used up, payment is on-chain.
+```
+
+## Probability (3 free / IP / UTC day, then x402)
+
+`POST {base}/intelligence/v1/probability`
+
+```json
+{"message": "<same user text>", "market_ids": ["<1 to 10 ids>"]}
+```
+
+Send only the chosen ids, often one. `message` remains required.
+
+Capture response headers on the first probability request (`curl -D -` or the runtime equivalent), because payment requirements arrive in a header.
+
+- HTTP 402 with an empty body: read `references/payment.md`, handle payment once, and retry the exact same JSON with `PAYMENT-SIGNATURE`. Never make another unsigned probability request merely to recover headers, and do not make a second payment attempt on the same nonce.
+- `code=22000`: settlement failed. A retry requires a new nonce and signature; the same header cannot be reused.
+- `code=4100`: show `msg` and stop.
+- `code=0`: read `references/response-format.md` and render only the returned result.
+
+On success, use `data.probability` and/or `data.result`, `data.markets`, `data.basis`, `data.charged`, `data.free_quota`, and `data.x402` when charged. If `data.probability` is an object containing `result` or `basis`, use those nested fields; otherwise use the sibling `data.result` and `data.basis`. Production `basis` is a structured object; older responses may return an array of `{source, summary, time}`. The API's `basis` is evidence for the assessment, not permission to regenerate or supplement it.

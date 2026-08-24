@@ -10,7 +10,7 @@ Install the Cournot skill with its dedicated installer:
 npx cournot-skills add Cournot-AI/cournot-skills/skills/cournot
 ```
 
-The installer detects supported agents such as Codex and Claude Code and lets you choose where to install the skill. After a successful fresh installation, it reads the installed `SKILL.md` and prints the Cournot welcome message. To install it globally without prompts for Codex:
+The installer detects supported agents such as Codex and Claude Code and lets you choose where to install the skill. After a successful fresh installation, the wrapper prints the Cournot welcome message. To install it globally without prompts for Codex:
 
 ```bash
 npx cournot-skills add Cournot-AI/cournot-skills/skills/cournot --global --agent codex --yes
@@ -24,7 +24,7 @@ The generic skills installer remains available as a fallback:
 npx skills add Cournot-AI/cournot-skills/skills/cournot
 ```
 
-The generic installer does not guarantee that an agent will display the post-install welcome message. Use `npx cournot-skills add` when that handoff is required. The welcome copy lives only in the installed `SKILL.md`, and the dedicated installer extracts it from there so the product copy has a single source of truth.
+The generic installer remains available when the dedicated wrapper's welcome output is not needed.
 
 ## Usage
 
@@ -68,7 +68,7 @@ Cournot never asks for a private key or seed phrase and never holds user funds. 
 
 ## Repository Structure
 
-The npm wrapper bundles the Cournot skill, invokes the pinned `skills` CLI with copy mode, and prints the welcome text only after a fresh successful installation.
+The npm wrapper invokes the pinned `skills` CLI with copy mode and prints its own welcome text only after a fresh successful installation.
 
 ```text
 ├── bin/
@@ -78,7 +78,10 @@ The npm wrapper bundles the Cournot skill, invokes the pinned `skills` CLI with 
 ├── skills/
 │   └── cournot/
 │       ├── SKILL.md
-│       └── evals/
+│       └── references/
+│           ├── payment.md
+│           ├── query-flow.md
+│           └── response-format.md
 └── test/
     └── welcome.test.mjs
 ```
