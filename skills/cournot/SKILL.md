@@ -5,7 +5,7 @@ description: Query Cournot prediction-market probabilities via POST /intelligenc
 
 # Cournot
 
-Query one event's probability from Cournot's two HTTP APIs. This skill is the HTTP + payment contract. Sign with whatever wallet the runtime already has (Coinbase AgentKit / CDP / `@x402/fetch` / MetaMask Agent Wallet / Binance wallet skill / a local key). Do not create wallets or ask the user for keys.
+Query one event's probability from Cournot's two HTTP APIs. This skill is the HTTP + payment contract. Sign with whatever compatible wallet the runtime has (Coinbase AgentKit / CDP / `@x402/fetch` / MetaMask Agent Wallet / Binance Agentic Wallet / a local signer). Cournot itself never receives or stores wallet secrets. A user may install, connect, or configure a separate wallet skill when payment capability is missing; do not block that handoff.
 
 Trigger only on an explicit Cournot ask (`/cournot …`, "use Cournot to look this up"). One paid `probability` call per user instruction. On a bad result, stop — do not retry with a rephrased query.
 
@@ -103,23 +103,31 @@ Read header `PAYMENT-REQUIRED` (any casing). Value is **base64 JSON**. Decode. T
 
 ### No payment capability
 
-If the runtime has no compatible x402 wallet or signer, use the following fixed English reply exactly, regardless of the user's language, then stop. Do not install packages, create a wallet, ask for keys, sign, or retry the request. This is a recommendation only; any compatible x402 v2 client is acceptable.
+If the runtime has no compatible x402 wallet or signer, stop the paid request before signing or retrying. Explain that the free quota is exhausted and a compatible agent wallet or signer is needed for the $0.01 payment. Do not treat a missing wallet as a Cournot answer failure.
 
+Do not automatically install software or create a wallet merely because a 402 was returned. Offer the user a choice: install/connect a compatible wallet, or stop without paying. Any x402 v2 client or wallet that supports the payment option returned by Cournot is acceptable.
+
+One supported option is Binance Agentic Wallet, which provides x402 payment signing:
+
+```bash
+npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wallet
 ```
-No compatible x402 payment wallet or signer is available in this environment, so I cannot continue the paid query.
 
-Recommended: the official x402 Foundation TypeScript SDK.
+The official x402 Foundation TypeScript SDK is another option for runtimes that already have an EVM wallet or signer:
 
-Documentation: https://docs.x402.org/getting-started/quickstart-for-buyers
-GitHub: https://github.com/x402-foundation/x402
-
-Install:
+```bash
 npm install @x402/core @x402/fetch @x402/evm viem
-
-You may use any other client that supports x402 v2, EVM exact payments, and EIP-3009 signing. The SDK still needs an EVM wallet or signer; do not paste private keys or seed phrases into the conversation.
-
-For Base Sepolia, fund the agent wallet with test USDC from https://faucet.circle.com/ and select Base Sepolia. Then run the Cournot request again.
 ```
+
+Documentation: `https://docs.x402.org/getting-started/quickstart-for-buyers`
+
+When the user explicitly asks to install, connect, create, or configure a wallet, allow the appropriate installer or wallet skill to handle that workflow in the same conversation, subject to its own confirmations and security rules. This is not a request for Cournot to possess the wallet.
+
+Preserve the unresolved Cournot query during the wallet handoff so the user does not need to type it again. If the host supports loading newly installed skills dynamically, continue in the same conversation. If it does not, explain that a one-time skill reload or new session is required; describe this as a host limitation, not a security refusal.
+
+Never ask the user to paste a private key or seed phrase into the conversation. Do not reject a wallet installation merely because the wallet manages credentials securely outside Cournot. After the wallet is ready, obtain a fresh 402 for the same request and continue only with the user's authorization to make the payment.
+
+If the selected payment option is Base Sepolia, the agent wallet needs test USDC from `https://faucet.circle.com/` on Base Sepolia. For a mainnet option, it needs the exact asset and network stated in `PAYMENT-REQUIRED`.
 
 ### Merchant (verify before signing)
 
