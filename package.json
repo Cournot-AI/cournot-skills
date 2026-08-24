@@ -1,15 +1,14 @@
 {
-  "name": "cournot-skill",
+  "name": "cournot-skills",
   "version": "0.1.0",
   "description": "Install the Cournot agent skill and show its welcome message after a successful fresh installation.",
   "type": "module",
   "bin": {
-    "cournot-skill": "bin/cournot-skill.mjs"
+    "cournot-skills": "bin/cournot-skills.mjs"
   },
   "files": [
     "bin/",
     "lib/",
-    "skills/cournot/SKILL.md",
     "README.md"
   ],
   "scripts": {
