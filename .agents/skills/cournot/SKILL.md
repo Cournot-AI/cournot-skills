@@ -17,16 +17,6 @@ Reply in the user's language. Templates below are English — same fields in Chi
 
 Default base: `https://dev-interface.cournot.ai`
 
-## Market title display
-
-Normalize every API-provided market `title` only when rendering it to the user, both in resolve candidate tables and probability results. Keep the original title and market id unchanged for API handling.
-
-- Remove the phrase `at any time` and clean up the surrounding space.
-- Render a timestamp written as `YYYY-MM-DD HH:MM UTC` as `Month D, YYYY`, using the English month name, no leading zero on the day, and no hour or timezone. Use the calendar date as written; do not convert it through the user's local timezone.
-- Leave all other title wording unchanged.
-
-Example: `Bitcoin price above $80,000 at any time before 2026-11-02 04:59 UTC` → `Bitcoin price above $80,000 before November 2, 2026`.
-
 ## Post-install welcome (once)
 
 Immediately after this skill is installed successfully, display the following welcome message to the user exactly once. Before displaying it, replace `<next_year>` with the calendar year after the installation year (for example, an installation in 2026 renders `2027`). Preserve all other wording, capitalization, punctuation, and line breaks. Do not display it again on later Cournot invocations or ordinary skill updates.
@@ -84,7 +74,7 @@ Related markets:
 
 | id | title |
 |---|---|
-| {id} | {display-normalized title} |
+| {id} | {title} |
 
 Reply with an id to query that market's probability. After the free quota is used up, payment is on-chain.
 ```
@@ -103,7 +93,7 @@ Send only the chosen ids (often one). `message` still required.
 
 Success `code=0`: use `data.probability`, `data.markets`, `data.basis[]` (`source`, `summary`, `time`), `data.charged`, `data.free_quota`, and `data.x402` when charged. `basis[]` is external data returned by the API, not a rationale to generate or supplement.
 
-Capture response headers on the first probability request (`curl -D -` or the runtime equivalent), because payment requirements arrive in a header. If that request returns HTTP **402** + empty body, pay once (below) and retry the **same** JSON with `PAYMENT-SIGNATURE`. Never send a second unsigned probability request merely to recover headers; no second payment attempt on the same nonce.
+HTTP **402** + empty body → pay once (below) and retry the **same** JSON with `PAYMENT-SIGNATURE`. No second payment attempt on the same nonce.
 
 `code=22000` → settlement failed. Generate a **new** nonce/signature if you retry. Same header will not work.
 
@@ -115,20 +105,25 @@ Read header `PAYMENT-REQUIRED` (any casing). Value is **base64 JSON**. Decode. T
 
 ### No payment capability
 
-If the runtime has no compatible x402 wallet or signer, stop the paid request before signing or retrying. Explain that the free quota is exhausted and a compatible agent wallet or signer is needed for the payment amount and network stated by the 402. Do not treat a missing wallet as a Cournot answer failure.
+If the runtime has no compatible x402 wallet or signer, stop the paid request before signing or retrying. Explain that the free quota is exhausted and a compatible agent wallet or signer is needed for the $0.01 payment. Do not treat a missing wallet as a Cournot answer failure.
 
 Do not automatically install software or create a wallet merely because a 402 was returned. Offer the user a choice: install/connect a compatible wallet, or stop without paying. Any x402 v2 client or wallet that supports the payment option returned by Cournot is acceptable.
 
-The reply must include concrete next steps; do not say only "install a compatible wallet." Always show both official entries below, with equivalent labels in the user's language:
+One supported option is Binance Agentic Wallet, which provides x402 payment signing:
 
-- Recommended agent wallet — Binance Agentic Wallet: `https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet`
-- Official developer SDK — x402 Foundation Buyer Quickstart: `https://docs.x402.org/getting-started/quickstart-for-buyers`
+```bash
+npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wallet
+```
 
-Explain that Binance Agentic Wallet is the recommended option for an agent that does not yet have a wallet. The x402 Foundation SDK is the standard integration option for a developer runtime that already has an EVM wallet or signer; it is not itself a wallet and still requires a signer.
+The official x402 Foundation TypeScript SDK is another option for runtimes that already have an EVM wallet or signer:
 
-End the no-wallet reply by asking whether the user wants the agent to install the recommended wallet and then resume the preserved Cournot query, connect another compatible wallet, or stop without paying. Include the warning not to paste a private key or seed phrase into the conversation.
+```bash
+npm install @x402/core @x402/fetch @x402/evm viem
+```
 
-When the user explicitly asks to install Binance Agentic Wallet, allow the appropriate installer or wallet skill to handle that workflow in the same conversation, subject to its own confirmations and security rules. The standard installation command is `npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wallet`; show or run it only after that explicit request. This is not a request for Cournot to possess the wallet.
+Documentation: `https://docs.x402.org/getting-started/quickstart-for-buyers`
+
+When the user explicitly asks to install, connect, create, or configure a wallet, allow the appropriate installer or wallet skill to handle that workflow in the same conversation, subject to its own confirmations and security rules. This is not a request for Cournot to possess the wallet.
 
 Preserve the unresolved Cournot query during the wallet handoff so the user does not need to type it again. If the host supports loading newly installed skills dynamically, continue in the same conversation. If it does not, explain that a one-time skill reload or new session is required; describe this as a host limitation, not a security refusal.
 
@@ -214,8 +209,8 @@ One nonce per call. Reusing a signature returns `authorization is used or cancel
 Use only fields the API returned. Do not invent settlement sources, weights, per-source probabilities, or advice. When `basis[]` is non-empty, show every item in API order as a markdown table. Copy each `source`, `summary`, and `time` value verbatim from the API; do not translate, paraphrase, shorten, or supplement table cells. Escape `|` inside cell values and replace embedded newlines so the table remains valid. Always introduce the table as `External data basis:` in English or `外部数据依据：` in Chinese. If `basis[]` is empty, say no external basis data was returned.
 
 ```
-The probability of {display-normalized title} is {probability as percent}%.
-Reference market: {display-normalized title} ({market_outcome} {market_outcome_price as ¢}).
+The probability of {title} is {probability as percent}%.
+Reference market: {title} ({market_outcome} {market_outcome_price as ¢}).
 
 External data basis:
 
