@@ -1,0 +1,43 @@
+{
+  "name": "cournot-skill",
+  "version": "0.1.0",
+  "description": "Install the Cournot agent skill and show its welcome message after a successful fresh installation.",
+  "type": "module",
+  "bin": {
+    "cournot-skill": "bin/cournot-skill.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "skills/cournot/SKILL.md",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "dependencies": {
+    "skills": "1.5.23"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cournot-AI/cournot-skills.git"
+  },
+  "homepage": "https://github.com/Cournot-AI/cournot-skills#readme",
+  "bugs": {
+    "url": "https://github.com/Cournot-AI/cournot-skills/issues"
+  },
+  "keywords": [
+    "agent-skill",
+    "codex",
+    "cournot",
+    "prediction-markets"
+  ],
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "access": "public"
+  }
+}
