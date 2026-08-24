@@ -1,0 +1,189 @@
+---
+name: cournot
+description: Query Cournot prediction-market probabilities via POST /intelligence/v1/resolve then POST /intelligence/v1/probability, including x402 payment (reshape official x402 envelopes so Cournot accepts them). Use when the user runs /cournot, says to use Cournot, or asks Cournot for an event probability. Do not invoke on casual odds questions — probability is paid after free quota.
+---
+
+# Cournot
+
+Query one event's probability from Cournot's two HTTP APIs. This skill is the HTTP + payment contract. Sign with whatever wallet the runtime already has (Coinbase AgentKit / CDP / `@x402/fetch` / MetaMask Agent Wallet / Binance wallet skill / a local key). Do not create wallets or ask the user for keys.
+
+Trigger only on an explicit Cournot ask (`/cournot …`, "use Cournot to look this up"). One paid `probability` call per user instruction. On a bad result, stop — do not retry with a rephrased query.
+
+`message` is the user's event in their own words, not the command. After dropping `/cournot` and `probability`, if no claim remains (asset, threshold, or date), ask for one and stop — do not POST.
+
+If they asked whether a market is mispriced or priced correctly: Cournot has no mispricing API. Say so and stop — do not POST.
+
+Reply in the user's language. Templates below are English — same fields in Chinese when the user wrote Chinese. Ignore `/cournot` and API titles when detecting language.
+
+Default base: `https://dev-interface.cournot.ai`
+
+## 1. Resolve (free)
+
+`POST {base}/intelligence/v1/resolve`  
+`Content-Type: application/json`
+
+```json
+{"message": "<user's event in their own words>", "limit": 5}
+```
+
+`message` is the event text (required). `limit` default 5, max 10.
+
+Success: `code=0`, `data.markets[]` each with `matching_confidence` and `market_info` (`id`, `title`, `description`, `start_time`, `end_time`, `market_outcome`, `market_outcome_price`). `charged` is always false.
+
+Empty `markets` → tell the user no market matched; suggest a more specific claim (asset, threshold, date). Stop.
+
+If `markets[]` contains exactly one item, treat it as the resolved event and immediately call probability with that item's `market_info.id`. Do not list the item or ask the user to send its id, regardless of `matching_confidence`.
+
+If `markets[]` contains multiple items, proceed to probability only when the user picked `id`s, or the leading market has confidence ≥ 0.85 **and** leads the next by ≥ 0.15. Those cutoffs stay internal.
+
+For unresolved multiple-item results, list and wait. Do not pick for them. User-facing list is a **markdown table**, one row per market — not a wrapped bullet line, and no extra "closest market" commentary.
+
+```
+Related markets:
+
+| id | title |
+|---|---|
+| {id} | {title} |
+
+Reply with an id to query that market's probability. After the free quota is used up, payment is on-chain.
+```
+
+`code=4100` → show `msg`, stop.
+
+## 2. Probability (3 free / IP / UTC day, then x402)
+
+`POST {base}/intelligence/v1/probability`
+
+```json
+{"message": "<same user text>", "market_ids": [<1 to 10 ids>]}
+```
+
+Send only the chosen ids (often one). `message` still required.
+
+Success `code=0`: use `data.probability`, `data.markets`, `data.basis[]` (`source`, `summary`, `time`), `data.charged`, `data.free_quota`, and `data.x402` when charged. `basis[]` is external data returned by the API, not a rationale to generate or supplement.
+
+HTTP **402** + empty body → pay once (below) and retry the **same** JSON with `PAYMENT-SIGNATURE`. No second payment attempt on the same nonce.
+
+`code=22000` → settlement failed. Generate a **new** nonce/signature if you retry. Same header will not work.
+
+`code=4100` → show `msg`, stop.
+
+## 3. Pay a 402
+
+Read header `PAYMENT-REQUIRED` (any casing). Value is **base64 JSON**. Decode. That object is the source of truth for amount, asset, network, and payee.
+
+### No payment capability
+
+If the runtime has no compatible x402 wallet or signer, use the following fixed English reply exactly, regardless of the user's language, then stop. Do not install packages, create a wallet, ask for keys, sign, or retry the request. This is a recommendation only; any compatible x402 v2 client is acceptable.
+
+```
+No compatible x402 payment wallet or signer is available in this environment, so I cannot continue the paid query.
+
+Recommended: the official x402 Foundation TypeScript SDK.
+
+Documentation: https://docs.x402.org/getting-started/quickstart-for-buyers
+GitHub: https://github.com/x402-foundation/x402
+
+Install:
+npm install @x402/core @x402/fetch @x402/evm viem
+
+You may use any other client that supports x402 v2, EVM exact payments, and EIP-3009 signing. The SDK still needs an EVM wallet or signer; do not paste private keys or seed phrases into the conversation.
+
+For Base Sepolia, fund the agent wallet with test USDC from https://faucet.circle.com/ and select Base Sepolia. Then run the Cournot request again.
+```
+
+### Merchant (verify before signing)
+
+`payTo` must be `0xA8b2c2594eC5774479749d26105C9FB6CDcA1d68`. If `accepts[].payTo` differs, stop — do not sign.
+
+This address is **Cournot's receiver**, not the agent's wallet. The agent pays **from** its own wallet **to** this address. Do not tell the user to deposit into `payTo`.
+
+### Choose an `accepts[]` entry the wallet can sign
+
+Prefer the first EVM `exact` entry the runtime supports. Typical **dev** (`dev-interface`):
+
+| network | asset | amount | extra |
+|---|---|---|---|
+| `eip155:84532` Base Sepolia | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` USDC | `10000` (= 0.01 USDC, 6 decimals) | EIP-712 name `USDC`, version `2` |
+| `eip155:56` BSC | `0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d` USD1 | `10000000000000000` | name `USD1`, version `1` |
+
+Prod 402 will list `eip155:8453` USDC instead of Sepolia. Always copy fields from the 402, not from this table.
+
+Sign **EIP-3009** `TransferWithAuthorization` (`from`, `to`=`payTo`, `value`=`amount`, `validAfter`, `validBefore`, `nonce` unique 32 bytes). Domain: `extra.name`, `extra.version`, chain id from `network` (`eip155:84532` → 84532), `verifyingContract`=`asset`.
+
+If the wallet has no USDC (or the listed asset) on that chain: say the **agent wallet** needs that test/mainnet token. Point at Circle faucet for Base Sepolia (`https://faucet.circle.com/`, network **Base Sepolia**) when on dev. Do not describe this as "Cournot cannot answer".
+
+### Cournot `PAYMENT-SIGNATURE` shape (required)
+
+Official x402 clients (`@x402/fetch`, AgentKit, CDP) often emit:
+
+```json
+{
+  "x402Version": 2,
+  "payload": { "signature": "0x…", "authorization": { "from": "0x…", "to": "0x…", "value": "10000", "validAfter": "0", "validBefore": "…", "nonce": "0x…" } },
+  "resource": { "url": "" },
+  "accepted": { "scheme": "exact", "network": "eip155:84532", "asset": "0x…", "amount": "10000", "payTo": "0x…" }
+}
+```
+
+Cournot **rejects** that (`payment network not supported`). Flatten before sending:
+
+```json
+{
+  "x402Version": 2,
+  "scheme": "exact",
+  "network": "eip155:84532",
+  "payload": {
+    "signature": "0x…",
+    "authorization": {
+      "from": "0xAGENT",
+      "to": "0xA8b2c2594eC5774479749d26105C9FB6CDcA1d68",
+      "value": "10000",
+      "validAfter": "0",
+      "validBefore": "<unix seconds>",
+      "nonce": "0x<32-byte hex>"
+    }
+  }
+}
+```
+
+`scheme` and `network` are **top-level**. Do not leave them only under `accepted`. `to` / `value` / `network` must match the chosen accept. `signature` may include `0x`.
+
+```js
+function toCournotPayment(obj) {
+  const a = obj.accepted || {};
+  return {
+    x402Version: obj.x402Version ?? 2,
+    scheme: obj.scheme || a.scheme || "exact",
+    network: obj.network || a.network,
+    payload: obj.payload,
+  };
+}
+```
+
+Base64-encode the **minified JSON**, send as request header **`PAYMENT-SIGNATURE`** (not `X-PAYMENT`, not `Authorization`). Retry the same `probability` body once.
+
+One nonce per call. Reusing a signature returns `authorization is used or canceled`.
+
+## 4. Recite (fixed)
+
+Use only fields the API returned. Do not invent settlement sources, weights, per-source probabilities, or advice. When `basis[]` is non-empty, show every item in API order as a markdown table. Escape `|` inside cell values and replace embedded newlines so the table remains valid. If `basis[]` is empty, say no external basis data was returned.
+
+```
+The probability of {title} is {probability as percent}%.
+Reference market: {title} ({market_outcome} {market_outcome_price as ¢}).
+
+External data basis:
+
+| source | summary | time |
+|---|---|---|
+| {source} | {summary} | {time} |
+
+This query was {not charged / charged on-chain txn_hash} (free quota remaining/total). This is an assessment of pricing, not investment advice.
+```
+
+If charged, mention `x402.txn_hash` / `network_id`. If not, say not charged.
+
+## Hosts
+
+One `SKILL.md`. Claude Code, Codex, Grok, and other agents that load Agent Skills all use this file. Point the host at `skills/cournot/` (or copy the folder into its skills directory).
