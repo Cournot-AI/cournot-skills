@@ -66,6 +66,8 @@ After the wallet is ready, the agent can return to the pending Cournot question 
 
 Cournot never asks for a private key or seed phrase and never holds user funds. Never paste wallet secrets into a conversation. A wallet should keep credentials in its own secure storage and provide only the authorization needed for each payment.
 
+Paid probability requests run through the bundled Cournot client. It keeps the wallet authorization and paid HTTP replay outside the model context; the agent receives only a sanitized payment preview before confirmation and the final Cournot response afterward.
+
 ## Repository Structure
 
 The npm wrapper invokes the pinned `skills` CLI with copy mode.
@@ -76,11 +78,15 @@ The npm wrapper invokes the pinned `skills` CLI with copy mode.
 ├── skills/
 │   └── cournot/
 │       ├── SKILL.md
+│       ├── scripts/
+│       │   ├── cournot-client.mjs
+│       │   └── payment-flow.mjs
 │       └── references/
 │           ├── payment.md
 │           ├── query-flow.md
 │           └── response-format.md
 └── test/
+    ├── cournot-client.test.mjs
     └── payment-flow.test.mjs
 ```
 
