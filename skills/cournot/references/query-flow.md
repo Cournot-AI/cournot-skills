@@ -43,7 +43,9 @@ Related markets:
 Reply with an id to query that market's probability. After the free quota is used up, payment is on-chain.
 ```
 
-## Probability (3 free / IP / UTC day, then x402)
+## Probability (3 free calls per account in total, then x402)
+
+Each account includes three free probability calls. This allowance does not reset. Resolve, disambiguation, and requests that return no probability remain free. Describe this only as an account allowance; never mention internal quota identifiers or imply that the allowance resets daily.
 
 Build the request body below, base64-encode its minified JSON, and pass it to the bundled client. Do not call the probability endpoint directly.
 

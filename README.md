@@ -46,7 +46,7 @@ Cournot returns the answer, not its proprietary algorithm.
 
 ## Pricing
 
-The first three calls each day are free. No setup or wallet is needed. After that, each call costs $0.01.
+Every account includes three free probability calls. This allowance does not reset. No setup or wallet is needed for those calls. After that, each call costs $0.01.
 
 If Cournot cannot answer because no market matches or the inputs are too thin, it says so and you are not charged.
 

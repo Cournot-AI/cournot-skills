@@ -202,6 +202,12 @@ test("free probability response completes without touching the wallet", async ()
               ],
             },
           },
+          free_quota: {
+            ip: "192.0.2.1",
+            total: 3,
+            used: 1,
+            remaining: 2,
+          },
         },
       }),
     wallet: wallet({
@@ -223,6 +229,11 @@ test("free probability response completes without touching the wallet", async ()
     result.response.data.probability.basis.cross_checks[0].time,
     "2000-01-01 20:00:00 UTC"
   );
+  assert.deepEqual(result.response.data.free_quota, {
+    total: 3,
+    used: 1,
+    remaining: 2,
+  });
   assert.equal(walletCalls, 0);
 });
 

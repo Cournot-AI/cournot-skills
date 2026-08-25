@@ -38,7 +38,7 @@ External data basis:
 
 {tables for every returned basis section and field}
 
-This query was {not charged / charged on-chain txn_hash} (free quota remaining/total). This is an assessment of pricing, not investment advice.
+This query was {not charged / charged on-chain txn_hash} (account free allowance remaining/total). This is an assessment of pricing, not investment advice.
 ```
 
-If charged, mention returned `x402.txn_hash` and `network_id`. If not, say it was not charged.
+Describe the free quota as a one-time account allowance. Never call it a daily allowance, say “today remaining,” mention an internal quota identifier, or imply that it resets. If charged, mention returned `x402.txn_hash` and `network_id`. If not, say it was not charged.
