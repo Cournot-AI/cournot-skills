@@ -20,7 +20,7 @@ import {
   parsePaymentRequirements,
 } from "./payment-flow.mjs";
 
-const PRODUCTION_API_BASE = "https://dev-interface.cournot.ai";
+const PRODUCTION_API_BASE = "https://interface.cournot.ai";
 const INTENT_TTL_MS = 30 * 60 * 1000;
 const APPROVAL_WAIT_MS = 45 * 1000;
 const APPROVAL_POLL_MS = 3 * 1000;
