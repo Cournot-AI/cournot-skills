@@ -17,7 +17,7 @@ const request = {
 
 const requirements = {
   x402Version: 2,
-  resource: { url: "https://dev-interface.cournot.ai/intelligence/v1/probability" },
+  resource: { url: "https://interface.cournot.ai/intelligence/v1/probability" },
   accepts: [
     {
       scheme: "exact",
@@ -163,6 +163,24 @@ async function preparedPayment({ walletImpl = wallet(), intents } = {}) {
   });
   return { prepared, intents: store };
 }
+
+test("default probability request targets the production API", async () => {
+  let requestedUrl;
+  const result = await prepareProbability({
+    request,
+    fetchImpl: async (url) => {
+      requestedUrl = url;
+      return jsonResponse({ code: 0, data: { probability: 0.5 } });
+    },
+    wallet: wallet(),
+  });
+
+  assert.equal(
+    requestedUrl,
+    "https://interface.cournot.ai/intelligence/v1/probability"
+  );
+  assert.equal(result.state, "complete");
+});
 
 test("free probability response completes without touching the wallet", async () => {
   let walletCalls = 0;

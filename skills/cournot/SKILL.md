@@ -13,7 +13,7 @@ Cournot has no mispricing API. If the user asks whether a market is mispriced or
 
 Reply in the user's language. Ignore `/cournot` and API titles when detecting it.
 
-API base: `https://dev-interface.cournot.ai`
+API base: `https://interface.cournot.ai`
 
 ## Workflow
 
