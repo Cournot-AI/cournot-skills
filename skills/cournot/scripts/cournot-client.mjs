@@ -568,6 +568,8 @@ ${hasMainnet ? "\n主网付款会转移真实资产。" : ""}
 3. 连接其他兼容钱包
 4. 停止，不付款
 
+执行任何钱包设置前，我会展示具体操作和风险并再次确认；钱包设置确认不等于付款确认。
+
 ${walletStatus === "UNCONNECTED" ? "如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。" : "请选择一种设置方式，或选择停止。"}`;
   }
 
@@ -592,6 +594,8 @@ Available actions:
 2. Configure x402 Buyer Quickstart with viem Local Accounts
 3. Connect another compatible wallet
 4. Stop without paying
+
+Before any wallet setup, I will show the exact action and risks and ask for separate confirmation. Wallet setup confirmation is not payment confirmation.
 
 ${walletStatus === "UNCONNECTED" ? 'Reply "sign in to wallet" if you already have a Binance Agentic Wallet. If you have not created one, create it in the Binance App first.' : "Choose one setup option, or stop."}`;
 }

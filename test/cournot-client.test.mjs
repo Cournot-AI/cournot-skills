@@ -348,6 +348,8 @@ test("wallet absence returns sanitized merchant routes without an intent", async
     ]
   );
   assert.equal(prepared.walletSetup.options[0].installed, false);
+  assert.match(prepared.presentation, /ask for separate confirmation/);
+  assert.match(prepared.presentation, /not payment confirmation/);
   assert.equal("intentId" in prepared, false);
 });
 
@@ -415,6 +417,8 @@ test("Chinese no-wallet presentation is deterministic and human-readable", async
   assert.match(result.presentation, /Binance Agentic Wallet/);
   assert.match(result.presentation, /x402 Foundation Buyer Quickstart/);
   assert.match(result.presentation, /viem Local Accounts/);
+  assert.match(result.presentation, /再次确认/);
+  assert.match(result.presentation, /不等于付款确认/);
   assert.match(result.presentation, /请回复“登录钱包”/);
   assert.doesNotMatch(
     result.presentation,
