@@ -2,7 +2,7 @@
 
 Read this reference only when `scripts/cournot-client.mjs prepare` returns a payment state. The client is the trust boundary: it obtains fresh merchant requirements, talks to Binance Agentic Wallet, validates the selected route, and submits the paid replay without exposing wallet credentials to the model.
 
-Never ask for, display, decode, transform, store, or relay wallet credentials or raw wallet command output. Never call the wallet signing command or the paid Cournot endpoint directly. If the client fails, report the sanitized error and stop.
+Never display, decode, transform, relay, or place wallet credentials in chat, command arguments, environment variables, or tool output. Never call the wallet signing command or the paid Cournot endpoint directly. If the client fails, report the sanitized error and stop.
 
 ## Payment preview
 
@@ -49,7 +49,7 @@ For `state=wallet_required`, output the returned `presentation` verbatim as the 
    - Amount must use `amountLabel`. Never show protocol base-unit integers as a human payment amount and never label a column “raw amount” or “原始金额”. If `amountLabel` explicitly says `base units`, preserve that qualification because token decimals were unavailable.
    - Recipient must use the complete `payTo` address.
 3. Always show all three `walletSetup.options`, in their returned order, with names and clickable URLs. Mark Binance Agentic Wallet as recommended. Do not omit x402 Foundation Buyer Quickstart or viem Local Accounts.
-4. Always offer these four actions: connect/install Binance Agentic Wallet, configure the x402 buyer with viem, connect another compatible wallet, or stop without paying.
+4. Always offer these four actions: connect/install Binance Agentic Wallet, configure the x402 buyer with viem after a separate setup confirmation, connect another compatible wallet, or stop without paying.
 5. When responding in Chinese and Binance Agentic Wallet is installed but unconnected, end with this explicit action: `如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。` Do not replace `登录钱包` with a slash-separated label.
 
 When Binance Agentic Wallet is installed but `walletStatus` is `UNCONNECTED`, say it is installed but not signed in. If the user already has an Agentic Wallet, offer “登录钱包” / “sign in to wallet”; the Binance flow will run `auth signin`, display its pairing code and link, then keep `auth verify` alive until confirmation. If the user has never created one, direct them to create it in the Binance App first.
@@ -60,7 +60,14 @@ The required setup references are:
 - x402 Foundation Buyer Quickstart: `https://docs.x402.org/getting-started/quickstart-for-buyers`
 - viem Local Accounts: `https://viem.sh/docs/accounts/local`
 
-Do not automatically install software, create a wallet, begin sign-in, or configure a signer without the user's choice.
+By default, only show these official options and wait for the user's choice. If the user explicitly asks to install, create, import, sign in to, or configure a wallet in the current session:
+
+1. Show the exact wallet, network, and setup action; warn that creating or importing a signer can control real assets.
+2. Ask for a separate explicit setup confirmation immediately before running any setup command. A prior request to use Cournot, choose a payment route, or pay is not this confirmation.
+3. After confirmation, follow the selected wallet or SDK's official setup flow. It may generate a wallet or accept an existing key only through its secure, non-echoing credential prompt. Never ask the user to paste a private key, seed phrase, session token, or wallet credential into chat, and never pass one through a command argument, environment variable, or captured tool output. If secure hidden input is unavailable, provide the official local setup command for the user to run and stop.
+4. Report only the public wallet address, selected network, supported asset, and next funding step. Do not expose credentials or raw wallet output.
+
+Setup confirmation authorizes only wallet setup. It does not authorize a transfer. After setup, rerun `prepare` for the preserved Cournot request, show fresh payment terms, and obtain the normal explicit payment confirmation immediately before signing.
 
 Install it only after an explicit request:
 
@@ -68,4 +75,4 @@ Install it only after an explicit request:
 npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wallet
 ```
 
-Never ask the user to paste a private key, seed phrase, session token, or wallet credential. After wallet setup, rerun `prepare` for the preserved Cournot request so the client obtains fresh payment terms.
+After wallet setup, rerun `prepare` for the preserved Cournot request so the client obtains fresh payment terms.
