@@ -139,6 +139,9 @@ function normalizeResponseForDisplay(response) {
   if (isObject(data.probability) && data.probability.basis != null) {
     data.probability.basis = normalizeBasisTimestamps(data.probability.basis);
   }
+  if (isObject(data.free_quota)) {
+    delete data.free_quota.ip;
+  }
   return output;
 }
 
