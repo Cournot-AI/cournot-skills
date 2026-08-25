@@ -195,15 +195,24 @@ test("free probability response completes without touching the wallet", async ()
             {
               source: "mock",
               summary:
-                "Market ends 2027-01-01T05:00:00Z; observed at 2000-01-01T21:00:00+01:00.",
+                'Market "Bitcoin above $150,000 before 2027-01-01T05:00:00Z" observed at 2000-01-01T21:00:00+01:00.',
               time: "2000-01-01T20:00:00Z",
+              url: "https://example.com/market?id=1",
             },
-            { source: "offset", time: "2000-01-01T21:00:00+01:00" },
+            {
+              source: "offset",
+              time: "2000-01-01T21:00:00+01:00",
+              url: "https://example.com/source",
+            },
           ],
           probability: {
             basis: {
               cross_checks: [
-                { source: "nested", time: "2000-01-01T20:00:00.999Z" },
+                {
+                  source: "nested",
+                  time: "2000-01-01T20:00:00.999Z",
+                  url: "javascript:alert(1)",
+                },
               ],
             },
           },
@@ -231,13 +240,22 @@ test("free probability response completes without touching the wallet", async ()
   );
   assert.equal(
     result.response.data.basis[0].summary,
-    "Market ends 2027-01-01 05:00:00 UTC; observed at 2000-01-01 20:00:00 UTC."
+    'Market "[Bitcoin above $150,000 before 2027-01-01 05:00:00 UTC](<https://example.com/market?id=1>)" observed at 2000-01-01 20:00:00 UTC.'
+  );
+  assert.equal(
+    result.response.data.basis[1].source,
+    "[offset](<https://example.com/source>)"
   );
   assert.doesNotMatch(JSON.stringify(result.response.data.basis), /T20:|Z"/);
   assert.equal(
     result.response.data.probability.basis.cross_checks[0].time,
     "2000-01-01 20:00:00 UTC"
   );
+  assert.equal(
+    result.response.data.probability.basis.cross_checks[0].source,
+    "nested"
+  );
+  assert.doesNotMatch(JSON.stringify(result.response.data), /"url":/);
   assert.deepEqual(result.response.data.free_quota, {
     total: 3,
     used: 1,

@@ -127,16 +127,56 @@ function normalizeBasisTimestamps(value) {
   return formatBasisTimestamp(value);
 }
 
+function basisLink(label, value) {
+  if (typeof label !== "string" || typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    const safeLabel = label.replace(/[\\[\]|]/g, "\\$&");
+    return `[${safeLabel}](<${url.href}>)`;
+  } catch {
+    return null;
+  }
+}
+
+function embedBasisLinks(value) {
+  if (Array.isArray(value)) return value.map(embedBasisLinks);
+  if (!isObject(value)) return value;
+
+  const output = Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, embedBasisLinks(item)])
+  );
+  if (!("url" in output)) return output;
+
+  const url = output.url;
+  delete output.url;
+  if (typeof output.summary === "string") {
+    let linked = false;
+    output.summary = output.summary.replace(/"([^"\n]+)"/, (match, label) => {
+      const link = basisLink(label, url);
+      if (!link) return match;
+      linked = true;
+      return `"${link}"`;
+    });
+    if (linked) return output;
+  }
+  const sourceLink = basisLink(output.source, url);
+  if (sourceLink) output.source = sourceLink;
+  return output;
+}
+
 function normalizeResponseForDisplay(response) {
   if (!isObject(response)) return response;
   const output = structuredClone(response);
   const data = output.data;
   if (!isObject(data)) return output;
   if (data.basis != null) {
-    data.basis = normalizeBasisTimestamps(data.basis);
+    data.basis = embedBasisLinks(normalizeBasisTimestamps(data.basis));
   }
   if (isObject(data.probability) && data.probability.basis != null) {
-    data.probability.basis = normalizeBasisTimestamps(data.probability.basis);
+    data.probability.basis = embedBasisLinks(
+      normalizeBasisTimestamps(data.probability.basis)
+    );
   }
   if (isObject(data.free_quota)) {
     delete data.free_quota.ip;

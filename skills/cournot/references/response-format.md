@@ -8,6 +8,8 @@ If `result` is present, use its returned fields for the assessment summary. Pref
 
 Whenever `basis` is present and non-empty, displaying it is mandatory. Introduce it as `External data basis:` in English or `外部数据依据：` in Chinese, then render every returned field in API order as markdown tables. Do not omit sections or move their content into prose. Copy string values verbatim without translating, paraphrasing, shortening, or supplementing them. Escape `|` in cells and replace embedded newlines so tables remain valid.
 
+The client removes each basis `url` field and embeds every valid HTTP(S) link into display text. When a `summary` contains quoted text, that quoted text is the link; otherwise the `source` value is the link. Preserve this Markdown exactly so it remains clickable. Never add a separate `url` column or print a bare basis URL.
+
 The client normalizes ISO timestamps anywhere inside `basis`, including timestamps embedded in longer `summary` strings and unrecognized nested fields. Display the normalized value exactly as `YYYY-MM-DD HH:mm:ss UTC`, for example `2000-01-01 20:00:00 UTC`. Never restore ISO `T`, a trailing `Z`, milliseconds, or convert the value to the user's local timezone.
 
 For a structured object, render each present section separately:
@@ -21,7 +23,7 @@ Format probability and return decimals with percentage equivalents, and USD fiel
 
 Never drop new or unrecognized basis data: render an array of objects using the union of its keys, a scalar array as a one-column table, and another nested object as a `path | value` table with one row per scalar leaf.
 
-For an older non-empty `basis[]`, show every item in API order in a `source | summary | time` table, copying values verbatim. If `basis` is absent, null, an empty object, or an empty array, say no external basis data was returned.
+For an older non-empty `basis[]`, show every item in API order in a `source | summary | time` table, copying values verbatim and preserving embedded links. If `basis` is absent, null, an empty object, or an empty array, say no external basis data was returned.
 
 Suggested structure:
 
