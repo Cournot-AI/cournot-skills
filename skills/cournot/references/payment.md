@@ -52,7 +52,7 @@ Never execute without confirmation, silently switch an option, pay for a differe
 
 ## Wallet unavailable or blocked
 
-For `state=wallet_blocked`, report only the returned `blockers`. Label each route with `networkLabel`, `tokenSymbol`, and `tokenAddress`; apply the legacy display fallback when normalized labels are absent. Do not infer another cause or silently switch routes.
+For `state=wallet_blocked`, report only the returned `blockers` and stop. Do not show the wallet setup menu again. For a route blocker, label it with `networkLabel`, `tokenSymbol`, and `tokenAddress`; apply the legacy display fallback when normalized labels are absent. For a wallet-scoped blocker, show its `wallet`, `operation`, and exact returned `reasons`, then offer only: retry the selected wallet operation, explicitly switch wallet, or stop. Do not infer another cause or silently switch routes or wallets.
 
 For `state=wallet_required`, output the returned `presentation` as the complete user-facing response and stop. Preserve it verbatim except for the legacy display fallback above when it visibly contains a raw known network, long token name, or known base-unit amount. Do not otherwise rewrite, summarize, translate, reorder, merge, or omit any part of it. The client generates this stable presentation in the user's language and includes the requirements below.
 
@@ -80,6 +80,8 @@ By default, only show these official options and wait for the user's choice. If 
 2. Ask for a separate explicit setup confirmation immediately before running any setup command. A prior request to use Cournot, choose a payment route, or pay is not this confirmation.
 3. After confirmation, follow the selected wallet or SDK's official setup flow. It may generate a wallet or accept an existing key only through its secure, non-echoing credential prompt. Never ask the user to paste a private key, seed phrase, session token, or wallet credential into chat, and never pass one through a command argument, environment variable, or captured tool output. If secure hidden input is unavailable, provide the official local setup command for the user to run and stop.
 4. Report only the public wallet address, selected network, supported asset, and next funding step. Do not expose credentials or raw wallet output.
+
+Once the user chooses a wallet, preserve that selection throughout installation, sign-in, connection checks, and funding. Do not show the generic wallet chooser or ask them to select the same wallet again. Complete the selected wallet's official setup before rerunning `prepare`. If setup is blocked, report that wallet's exact sanitized blocker and offer retry, explicit switch, or stop.
 
 Setup confirmation authorizes only wallet setup. It does not authorize a transfer. After setup, rerun `prepare` for the preserved Cournot request, show fresh payment terms, and obtain the normal explicit payment confirmation immediately before signing.
 
