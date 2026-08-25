@@ -101,6 +101,47 @@ function redactSensitive(value) {
   return output;
 }
 
+function formatBasisTimestamp(value) {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      value
+    )
+  ) {
+    return value;
+  }
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return value;
+  return `${timestamp.toISOString().slice(0, 19).replace("T", " ")} UTC`;
+}
+
+function normalizeBasisTimestamps(value) {
+  if (Array.isArray(value)) return value.map(normalizeBasisTimestamps);
+  if (isObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        normalizeBasisTimestamps(item),
+      ])
+    );
+  }
+  return formatBasisTimestamp(value);
+}
+
+function normalizeResponseForDisplay(response) {
+  if (!isObject(response)) return response;
+  const output = structuredClone(response);
+  const data = output.data;
+  if (!isObject(data)) return output;
+  if (data.basis != null) {
+    data.basis = normalizeBasisTimestamps(data.basis);
+  }
+  if (isObject(data.probability) && data.probability.basis != null) {
+    data.probability.basis = normalizeBasisTimestamps(data.probability.basis);
+  }
+  return output;
+}
+
 function validateProbabilityRequest(request) {
   if (!isObject(request)) fail("Probability request must be an object");
   if (typeof request.message !== "string" || request.message.trim() === "") {
@@ -312,6 +353,15 @@ function safeTokenSymbol(value) {
   return typeof value === "string" && /^[A-Za-z0-9 ._-]{1,32}$/.test(value)
     ? value
     : null;
+}
+
+function normalizeDecimal(value) {
+  if (value == null) return null;
+  const text = String(value);
+  if (!/^\d+(?:\.\d+)?$/.test(text)) return text;
+  if (!text.includes(".")) return text;
+  const normalized = text.replace(/0+$/, "").replace(/\.$/, "");
+  return normalized === "" ? "0" : normalized;
 }
 
 function tokenMetadata(option) {
@@ -540,18 +590,30 @@ function sanitizePreviewOptions(previewOptions, requirements) {
 }
 
 function publicReadyOptions(ready) {
-  return ready.map((option, index) => ({
-    displayIndex: index + 1,
-    network: option.network,
-    tokenAddress: option.tokenAddress,
-    tokenSymbol: option.tokenSymbol,
-    amount: option.amount,
-    amountUsd: option.amountUsd,
-    payTo: option.payTo,
-    currentBalance: option.currentBalance,
-    currentBalanceUsd: option.currentBalanceUsd,
-    needApproveFirst: option.needApproveFirst,
-  }));
+  return ready.map((option, index) => {
+    const amount = normalizeDecimal(option.amount);
+    const currentBalance = normalizeDecimal(option.currentBalance);
+    return {
+      displayIndex: index + 1,
+      network: option.network,
+      tokenAddress: option.tokenAddress,
+      tokenSymbol: option.tokenSymbol,
+      amount,
+      amountLabel:
+        amount == null
+          ? null
+          : `${amount}${option.tokenSymbol ? ` ${option.tokenSymbol}` : ""}`,
+      amountUsd: normalizeDecimal(option.amountUsd),
+      payTo: option.payTo,
+      currentBalance,
+      balanceLabel:
+        currentBalance == null
+          ? null
+          : `${currentBalance}${option.tokenSymbol ? ` ${option.tokenSymbol}` : ""}`,
+      currentBalanceUsd: normalizeDecimal(option.currentBalanceUsd),
+      needApproveFirst: option.needApproveFirst,
+    };
+  });
 }
 
 function publicBlockers(blockers) {
@@ -575,7 +637,7 @@ export async function prepareProbability({
     return redactSensitive({
       state: "complete",
       httpStatus: initial.status,
-      response: initial.body,
+      response: normalizeResponseForDisplay(initial.body),
     });
   }
   if (!initial.paymentRequired) {
@@ -727,7 +789,7 @@ export async function executePayment({
     return redactSensitive({
       state: settled ? "complete" : "payment_failed",
       httpStatus: paid.status,
-      response: paid.body,
+      response: normalizeResponseForDisplay(paid.body),
     });
   } finally {
     lease.consume();

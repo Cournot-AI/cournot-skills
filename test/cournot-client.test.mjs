@@ -102,11 +102,11 @@ function previewResult({ ready = true } = {}) {
           reasons: ready ? [] : ["INSUFFICIENT_BALANCE"],
           tokenAddress: requirements.accepts[1].asset,
           tokenSymbol: "USD1",
-          amount: "0.01",
-          amountUsd: "0.01",
+          amount: "0.010000000000000000",
+          amountUsd: "0.009999200000000000",
           payTo: requirements.accepts[1].payTo,
-          currentBalance: "1.00",
-          currentBalanceUsd: "1.00",
+          currentBalance: "4.980000000000000000",
+          currentBalanceUsd: "4.979601600000000000",
           needApproveFirst: false,
           originalAccept: requirements.accepts[1],
         },
@@ -169,7 +169,23 @@ test("free probability response completes without touching the wallet", async ()
   const result = await prepareProbability({
     request,
     fetchImpl: async () =>
-      jsonResponse({ code: 0, data: { result: { point_estimate: 0.61 } } }),
+      jsonResponse({
+        code: 0,
+        data: {
+          result: { point_estimate: 0.61 },
+          basis: [
+            { source: "mock", time: "2000-01-01T20:00:00Z" },
+            { source: "offset", time: "2000-01-01T21:00:00+01:00" },
+          ],
+          probability: {
+            basis: {
+              cross_checks: [
+                { source: "nested", time: "2000-01-01T20:00:00.999Z" },
+              ],
+            },
+          },
+        },
+      }),
     wallet: wallet({
       preview() {
         walletCalls += 1;
@@ -180,6 +196,15 @@ test("free probability response completes without touching the wallet", async ()
 
   assert.equal(result.state, "complete");
   assert.equal(result.response.data.result.point_estimate, 0.61);
+  assert.deepEqual(
+    result.response.data.basis.map(({ time }) => time),
+    ["2000-01-01 20:00:00 UTC", "2000-01-01 20:00:00 UTC"]
+  );
+  assert.doesNotMatch(JSON.stringify(result.response.data.basis), /T20:|Z"/);
+  assert.equal(
+    result.response.data.probability.basis.cross_checks[0].time,
+    "2000-01-01 20:00:00 UTC"
+  );
   assert.equal(walletCalls, 0);
 });
 
@@ -217,6 +242,13 @@ test("402 preparation exposes every route but no wallet credential", async () =>
   assert.equal(prepared.options.length, 1);
   assert.equal(prepared.options[0].displayIndex, 1);
   assert.equal(prepared.options[0].network, "eip155:56");
+  assert.equal(prepared.options[0].amount, "0.01");
+  assert.equal(prepared.options[0].amountLabel, "0.01 USD1");
+  assert.equal(prepared.options[0].currentBalance, "4.98");
+  assert.equal(prepared.options[0].balanceLabel, "4.98 USD1");
+  assert.equal(prepared.options[0].amountUsd, "0.0099992");
+  assert.equal(prepared.options[0].currentBalanceUsd, "4.9796016");
+  assert.doesNotMatch(serialized, /0\.010000000000000000/);
   assert.doesNotMatch(serialized, /wallet-payment-id-must-stay-internal/);
   assert.doesNotMatch(serialized, /paymentHeaderValue|signature|nonce/i);
 });
