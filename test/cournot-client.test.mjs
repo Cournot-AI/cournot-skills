@@ -33,7 +33,11 @@ const requirements = {
       asset: "0x2222222222222222222222222222222222222222",
       amount: "10000000000000000",
       payTo: "0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-      extra: { name: "USD1", version: "1", assetTransferMethod: "eip3009" },
+      extra: {
+        name: "World Liberty Financial USD",
+        version: "1",
+        assetTransferMethod: "eip3009",
+      },
     },
   ],
 };
@@ -302,7 +306,11 @@ test("402 preparation exposes every route but no wallet credential", async () =>
   );
   assert.equal(prepared.options.length, 1);
   assert.equal(prepared.options[0].displayIndex, 1);
-  assert.equal(prepared.options[0].network, "eip155:56");
+  assert.equal(
+    prepared.options[0].networkLabel,
+    "BNB Chain mainnet (eip155:56, mainnet)"
+  );
+  assert.equal("network" in prepared.options[0], false);
   assert.equal(prepared.options[0].amount, "0.01");
   assert.equal(prepared.options[0].amountLabel, "0.01 USD1");
   assert.equal(prepared.options[0].currentBalance, "4.98");
@@ -397,7 +405,11 @@ test("Chinese no-wallet presentation is deterministic and human-readable", async
         asset: "0x2222222222222222222222222222222222222222",
         amount: "10000000000000000",
         payTo: "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        extra: { name: "USD1", version: "1", assetTransferMethod: "eip3009" },
+        extra: {
+          name: "World Liberty Financial USD",
+          version: "1",
+          assetTransferMethod: "eip3009",
+        },
       },
     ],
   };
@@ -414,6 +426,10 @@ test("Chinese no-wallet presentation is deterministic and human-readable", async
   assert.match(result.presentation, /\| 0 \| Base Sepolia/);
   assert.match(result.presentation, /0\.01 USDC/);
   assert.match(result.presentation, /0\.01 USD1/);
+  assert.match(
+    result.presentation,
+    /BNB Chain mainnet \(eip155:56, mainnet\)/
+  );
   assert.match(result.presentation, /Binance Agentic Wallet/);
   assert.match(result.presentation, /x402 Foundation Buyer Quickstart/);
   assert.match(result.presentation, /viem Local Accounts/);
@@ -433,9 +449,25 @@ test("wallet blockers are returned without creating a signable intent", async ()
 
   assert.equal(prepared.state, "wallet_blocked");
   assert.deepEqual(
-    prepared.blockers.flatMap(({ reasons }) => reasons),
-    ["UNSUPPORTED_NETWORK", "INSUFFICIENT_BALANCE"]
+    prepared.blockers.map((blocker) => ({
+      reasons: blocker.reasons,
+      networkLabel: blocker.networkLabel,
+      tokenSymbol: blocker.tokenSymbol,
+    })),
+    [
+      {
+        reasons: ["UNSUPPORTED_NETWORK"],
+        networkLabel: "Base mainnet (eip155:8453, mainnet)",
+        tokenSymbol: "USDC",
+      },
+      {
+        reasons: ["INSUFFICIENT_BALANCE"],
+        networkLabel: "BNB Chain mainnet (eip155:56, mainnet)",
+        tokenSymbol: "USD1",
+      },
+    ]
   );
+  assert.equal(prepared.blockers.some((blocker) => "network" in blocker), false);
   assert.equal("intentId" in prepared, false);
 });
 
