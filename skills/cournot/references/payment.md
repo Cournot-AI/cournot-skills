@@ -14,6 +14,7 @@ The client returns every merchant route in `serverOptions` and the Binance route
 - If exactly one is ready, show a compact confirmation without calling it “option 1.”
 - Always show wallet, the exact returned network identifier (for example `eip155:56`) together with its mainnet/testnet status, token with full contract address, human-readable amount, estimated USD value when available, balance when available, recipient, and approval requirement.
 - Use `amountLabel` and `balanceLabel` exactly for token quantities. They are normalized by the client: display `0.01 USD1`, never zero-padded forms such as `0.010000000000000000 USD1`.
+- Use `amountUsdLabel` and `balanceUsdLabel` exactly for estimated USD values. Never display raw `amountUsd` or `currentBalanceUsd` values. The client uses two decimal places at or above `$0.01` and six decimal places below `$0.01`.
 - A mainnet payment transfers real assets. Obtain explicit confirmation immediately before execution.
 
 Preserve `intentId` and the mapping from each displayed choice while waiting. It expires after thirty minutes and can be consumed only once.

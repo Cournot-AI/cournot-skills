@@ -103,10 +103,10 @@ function previewResult({ ready = true } = {}) {
           tokenAddress: requirements.accepts[1].asset,
           tokenSymbol: "USD1",
           amount: "0.010000000000000000",
-          amountUsd: "0.009999200000000000",
+          amountUsd: "0.00999693449049656950064711307462542454",
           payTo: requirements.accepts[1].payTo,
           currentBalance: "4.980000000000000000",
-          currentBalanceUsd: "4.979601600000000000",
+          currentBalanceUsd: "4.96847644177679504182161519808883599638",
           needApproveFirst: false,
           originalAccept: requirements.accepts[1],
         },
@@ -246,8 +246,16 @@ test("402 preparation exposes every route but no wallet credential", async () =>
   assert.equal(prepared.options[0].amountLabel, "0.01 USD1");
   assert.equal(prepared.options[0].currentBalance, "4.98");
   assert.equal(prepared.options[0].balanceLabel, "4.98 USD1");
-  assert.equal(prepared.options[0].amountUsd, "0.0099992");
-  assert.equal(prepared.options[0].currentBalanceUsd, "4.9796016");
+  assert.equal(
+    prepared.options[0].amountUsd,
+    "0.00999693449049656950064711307462542454"
+  );
+  assert.equal(prepared.options[0].amountUsdLabel, "$0.009997");
+  assert.equal(
+    prepared.options[0].currentBalanceUsd,
+    "4.96847644177679504182161519808883599638"
+  );
+  assert.equal(prepared.options[0].balanceUsdLabel, "$4.97");
   assert.doesNotMatch(serialized, /0\.010000000000000000/);
   assert.doesNotMatch(serialized, /wallet-payment-id-must-stay-internal/);
   assert.doesNotMatch(serialized, /paymentHeaderValue|signature|nonce/i);

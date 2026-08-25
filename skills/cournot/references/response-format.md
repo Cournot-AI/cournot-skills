@@ -4,7 +4,7 @@ Read this reference after a successful probability response.
 
 Use only fields returned by the API. Do not browse for more evidence, produce another estimate, or invent sources, weights, scenarios, per-source probabilities, links, advice, or rationale. The Cournot result is the answer.
 
-If `result` is present, use its returned fields for the assessment summary. Prefer `result.point_estimate` for the headline. Display all returned `result` fields in one markdown table using only columns actually returned. Render probability decimals as percentages without changing their meaning: `0.035` → `3.5%`, `[0.02, 0.06]` → `2%–6%`. Leave enum strings unchanged.
+If `result` is present, use its returned fields for the assessment summary. Prefer `result.point_estimate` for the headline. Use the display-normalized market title only in that probability headline. Never add a separate `Reference market:` / `参考市场：` line or repeat the market title and market price below the headline. Display all returned `result` fields in one markdown table using only columns actually returned. Render probability decimals as percentages without changing their meaning: `0.035` → `3.5%`, `[0.02, 0.06]` → `2%–6%`. Leave enum strings unchanged.
 
 Whenever `basis` is present and non-empty, displaying it is mandatory. Introduce it as `External data basis:` in English or `外部数据依据：` in Chinese, then render every returned field in API order as markdown tables. Do not omit sections or move their content into prose. Copy string values verbatim without translating, paraphrasing, shortening, or supplementing them. Escape `|` in cells and replace embedded newlines so tables remain valid.
 
@@ -27,7 +27,6 @@ Suggested structure:
 
 ```text
 The probability of {display-normalized title} is {point_estimate or probability as percent}%.
-Reference market: {display-normalized title} ({market_outcome} {market_outcome_price as ¢}).
 
 Cournot assessment:
 
