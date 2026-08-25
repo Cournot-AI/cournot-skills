@@ -160,8 +160,8 @@ function embedBasisLinks(value) {
     });
     if (linked) return output;
   }
-  const sourceLink = basisLink(output.source, url);
-  if (sourceLink) output.source = sourceLink;
+  const summaryLink = basisLink(output.summary, url);
+  if (summaryLink) output.summary = summaryLink;
   return output;
 }
 
