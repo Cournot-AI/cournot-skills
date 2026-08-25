@@ -201,6 +201,7 @@ test("free probability response completes without touching the wallet", async ()
             },
             {
               source: "offset",
+              summary: "Offset source summary.",
               time: "2000-01-01T21:00:00+01:00",
               url: "https://example.com/source",
             },
@@ -244,7 +245,11 @@ test("free probability response completes without touching the wallet", async ()
   );
   assert.equal(
     result.response.data.basis[1].source,
-    "[offset](<https://example.com/source>)"
+    "offset"
+  );
+  assert.equal(
+    result.response.data.basis[1].summary,
+    "[Offset source summary.](<https://example.com/source>)"
   );
   assert.doesNotMatch(JSON.stringify(result.response.data.basis), /T20:|Z"/);
   assert.equal(
