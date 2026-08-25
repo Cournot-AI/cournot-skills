@@ -38,10 +38,6 @@ const requirements = {
   ],
 };
 
-const encodedRequirements = Buffer.from(JSON.stringify(requirements)).toString(
-  "base64"
-);
-
 function jsonResponse(body, init = {}) {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -50,10 +46,12 @@ function jsonResponse(body, init = {}) {
   });
 }
 
-function paymentRequiredResponse() {
+function paymentRequiredResponse(value = requirements) {
   return new Response(null, {
     status: 402,
-    headers: { "PAYMENT-REQUIRED": encodedRequirements },
+    headers: {
+      "PAYMENT-REQUIRED": Buffer.from(JSON.stringify(value)).toString("base64"),
+    },
   });
 }
 
@@ -191,6 +189,31 @@ test("402 preparation exposes every route but no wallet credential", async () =>
 
   assert.equal(prepared.state, "payment_confirmation_required");
   assert.equal(prepared.serverOptions.length, 2);
+  assert.deepEqual(
+    prepared.serverOptions.map((option) => ({
+      originalIndex: option.originalIndex,
+      network: option.network,
+      tokenSymbol: option.tokenSymbol,
+      displayAmount: option.displayAmount,
+      amountLabel: option.amountLabel,
+    })),
+    [
+      {
+        originalIndex: 0,
+        network: "eip155:8453",
+        tokenSymbol: "USDC",
+        displayAmount: "0.01",
+        amountLabel: "0.01 USDC",
+      },
+      {
+        originalIndex: 1,
+        network: "eip155:56",
+        tokenSymbol: "USD1",
+        displayAmount: "0.01",
+        amountLabel: "0.01 USD1",
+      },
+    ]
+  );
   assert.equal(prepared.options.length, 1);
   assert.equal(prepared.options[0].displayIndex, 1);
   assert.equal(prepared.options[0].network, "eip155:56");
@@ -212,6 +235,18 @@ test("wallet absence returns sanitized merchant routes without an intent", async
   assert.equal(prepared.state, "wallet_required");
   assert.equal(prepared.reason, "WALLET_UNAVAILABLE");
   assert.equal(prepared.serverOptions.length, 2);
+  assert.deepEqual(
+    prepared.walletSetup.options.map(({ name, recommended }) => ({
+      name,
+      recommended,
+    })),
+    [
+      { name: "Binance Agentic Wallet", recommended: true },
+      { name: "x402 Foundation Buyer Quickstart", recommended: false },
+      { name: "viem Local Accounts", recommended: false },
+    ]
+  );
+  assert.equal(prepared.walletSetup.options[0].installed, false);
   assert.equal("intentId" in prepared, false);
 });
 
@@ -229,8 +264,61 @@ test("a disconnected wallet stops before preview or intent creation", async () =
   assert.equal(prepared.state, "wallet_required");
   assert.equal(prepared.reason, "WALLET_NOT_CONNECTED");
   assert.equal(prepared.walletStatus, "UNCONNECTED");
+  assert.equal(prepared.walletSetup.options[0].installed, true);
+  assert.equal(prepared.walletSetup.options[0].connected, false);
+  assert.match(prepared.presentation, /0\.01 USDC/);
+  assert.match(prepared.presentation, /0\.01 USD1/);
+  assert.match(prepared.presentation, /x402 Foundation Buyer Quickstart/);
+  assert.match(prepared.presentation, /viem Local Accounts/);
+  assert.doesNotMatch(prepared.presentation, /10000000000000000|raw amount|原始金额/);
   assert.equal(previewCalls, 0);
   assert.equal("intentId" in prepared, false);
+});
+
+test("Chinese no-wallet presentation is deterministic and human-readable", async () => {
+  const paymentRequirements = {
+    x402Version: 2,
+    resource: { url: "" },
+    accepts: [
+      {
+        scheme: "exact",
+        network: "eip155:84532",
+        asset: "0x1111111111111111111111111111111111111111",
+        amount: "10000",
+        payTo: "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        extra: { name: "USDC", version: "2", assetTransferMethod: "eip3009" },
+      },
+      {
+        scheme: "exact",
+        network: "eip155:56",
+        asset: "0x2222222222222222222222222222222222222222",
+        amount: "10000000000000000",
+        payTo: "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        extra: { name: "USD1", version: "1", assetTransferMethod: "eip3009" },
+      },
+    ],
+  };
+  const result = await prepareProbability({
+    request: { message: "BTC 年底前会到 15 万美元吗", market_ids: [101] },
+    fetchImpl: async () => paymentRequiredResponse(paymentRequirements),
+    wallet: wallet({
+      preflight: () => ({ connected: false, status: "UNCONNECTED" }),
+    }),
+    intents: createMemoryIntentStore(),
+  });
+
+  assert.equal(result.state, "wallet_required");
+  assert.match(result.presentation, /\| 0 \| Base Sepolia/);
+  assert.match(result.presentation, /0\.01 USDC/);
+  assert.match(result.presentation, /0\.01 USD1/);
+  assert.match(result.presentation, /Binance Agentic Wallet/);
+  assert.match(result.presentation, /x402 Foundation Buyer Quickstart/);
+  assert.match(result.presentation, /viem Local Accounts/);
+  assert.match(result.presentation, /请回复“登录钱包”/);
+  assert.doesNotMatch(
+    result.presentation,
+    /原始金额|10000000000000000|wallet-signature|nonce/i
+  );
 });
 
 test("wallet blockers are returned without creating a signable intent", async () => {
