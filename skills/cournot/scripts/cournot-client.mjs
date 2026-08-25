@@ -28,19 +28,14 @@ const APPROVAL_POLL_MS = 3 * 1000;
 const NETWORK_METADATA = {
   "eip155:8453": { name: "Base mainnet", environment: "mainnet" },
   "eip155:84532": { name: "Base Sepolia", environment: "testnet" },
-  "eip155:56": { name: "BNB Smart Chain mainnet", environment: "mainnet" },
+  "eip155:56": { name: "BNB Chain mainnet", environment: "mainnet" },
 };
 
-const TOKEN_METADATA = new Map(
-  [
-    ["eip155:8453", "USDC", 6],
-    ["eip155:84532", "USDC", 6],
-    ["eip155:56", "USD1", 18],
-  ].map(([network, symbol, decimals]) => [
-    `${network}:${symbol}`,
-    { symbol, decimals },
-  ])
-);
+const TOKEN_METADATA = new Map([
+  ["eip155:8453", { symbol: "USDC", decimals: 6 }],
+  ["eip155:84532", { symbol: "USDC", decimals: 6 }],
+  ["eip155:56", { symbol: "USD1", decimals: 18 }],
+]);
 
 const WALLET_SETUP_OPTIONS = [
   {
@@ -434,7 +429,7 @@ function tokenMetadata(option) {
   const declaredSymbol = safeTokenSymbol(option.extra?.name);
   const canonicalSymbol =
     declaredSymbol === "USD Coin" ? "USDC" : declaredSymbol;
-  const known = TOKEN_METADATA.get(`${option.network}:${canonicalSymbol}`);
+  const known = TOKEN_METADATA.get(option.network);
   const declaredDecimals = Number(option.extra?.decimals);
   const decimals =
     known?.decimals ??
@@ -457,15 +452,27 @@ function formatUnits(value, decimals) {
   return fraction ? `${whole}.${fraction}` : whole;
 }
 
+function publicNetwork(network) {
+  const metadata = NETWORK_METADATA[network];
+  const networkName = metadata?.name ?? network;
+  const networkEnvironment = metadata?.environment ?? "unknown";
+  return {
+    networkName,
+    networkEnvironment,
+    networkLabel:
+      networkEnvironment === "unknown"
+        ? `${networkName} (unknown)`
+        : `${networkName} (${network}, ${networkEnvironment})`,
+  };
+}
+
 function publicServerOptions(requirements) {
   return enumeratePaymentOptions(requirements).map((option, index) => ({
     originalIndex: index,
     displayIndex: index + 1,
     scheme: option.scheme,
     network: option.network,
-    networkName: NETWORK_METADATA[option.network]?.name ?? option.network,
-    networkEnvironment:
-      NETWORK_METADATA[option.network]?.environment ?? "unknown",
+    ...publicNetwork(option.network),
     asset: option.asset,
     ...(() => {
       const metadata = tokenMetadata(option);
@@ -511,22 +518,10 @@ function walletRequiredPresentation({ request, reason, walletStatus, serverOptio
   const chinese = /[\u3400-\u9fff]/u.test(request.message);
   const rows = serverOptions
     .map((option) => {
-      const environment =
-        option.networkEnvironment === "mainnet"
-          ? chinese
-            ? "主网"
-            : "mainnet"
-          : option.networkEnvironment === "testnet"
-            ? chinese
-              ? "测试网"
-              : "testnet"
-            : chinese
-              ? "环境未知"
-              : "environment unknown";
       const asset = option.tokenSymbol
         ? `${option.tokenSymbol} — \`${markdownCell(option.asset)}\``
         : `\`${markdownCell(option.asset)}\``;
-      return `| ${option.originalIndex} | ${markdownCell(option.networkName)}（\`${markdownCell(option.network)}\`，${environment}） | ${asset} | ${markdownCell(option.amountLabel)} | \`${markdownCell(option.payTo)}\` |`;
+      return `| ${option.originalIndex} | ${markdownCell(option.networkLabel)} | ${asset} | ${markdownCell(option.amountLabel)} | \`${markdownCell(option.payTo)}\` |`;
     })
     .join("\n");
   const hasMainnet = serverOptions.some(
@@ -635,13 +630,16 @@ function sanitizePreviewOptions(previewOptions, requirements) {
       requirements,
       option.originalAccept
     );
+    const network = option.originalAccept?.network ?? null;
     const safe = {
       walletOptionIndex: option.index,
       status: option.status,
       reasons: Array.isArray(option.reasons) ? option.reasons : [],
-      network: option.originalAccept?.network ?? null,
+      network,
       tokenAddress: option.tokenAddress ?? option.originalAccept?.asset ?? null,
-      tokenSymbol: option.tokenSymbol ?? null,
+      tokenSymbol:
+        tokenMetadata(option.originalAccept ?? {}).symbol ??
+        safeTokenSymbol(option.tokenSymbol),
       amount: option.amount ?? null,
       amountUsd: option.amountUsd ?? null,
       payTo: option.payTo ?? option.originalAccept?.payTo ?? null,
@@ -667,7 +665,7 @@ function publicReadyOptions(ready) {
     const currentBalanceUsd = normalizeDecimal(option.currentBalanceUsd);
     return {
       displayIndex: index + 1,
-      network: option.network,
+      networkLabel: publicNetwork(option.network).networkLabel,
       tokenAddress: option.tokenAddress,
       tokenSymbol: option.tokenSymbol,
       amount,
@@ -694,7 +692,8 @@ function publicBlockers(blockers) {
   return blockers.map((option) => ({
     status: option.status,
     reasons: option.reasons,
-    network: option.network,
+    networkLabel: publicNetwork(option.network).networkLabel,
+    tokenSymbol: option.tokenSymbol,
     tokenAddress: option.tokenAddress,
   }));
 }
