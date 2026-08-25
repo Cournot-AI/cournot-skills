@@ -364,6 +364,30 @@ function normalizeDecimal(value) {
   return normalized === "" ? "0" : normalized;
 }
 
+function roundDecimal(value, places) {
+  const normalized = normalizeDecimal(value);
+  if (normalized == null || !/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+
+  const [whole, fraction = ""] = normalized.split(".");
+  const kept = fraction.padEnd(places, "0").slice(0, places);
+  let scaled = BigInt(`${whole}${kept}` || "0");
+  if ((fraction[places] || "0") >= "5") scaled += 1n;
+
+  const digits = scaled.toString().padStart(places + 1, "0");
+  if (places === 0) return digits;
+  return `${digits.slice(0, -places)}.${digits.slice(-places)}`;
+}
+
+function formatUsdLabel(value) {
+  const normalized = normalizeDecimal(value);
+  if (normalized == null || !/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+
+  const [whole, fraction = ""] = normalized.split(".");
+  const atLeastOneCent =
+    BigInt(whole) > 0n || BigInt(fraction.padEnd(2, "0").slice(0, 2)) >= 1n;
+  return `$${roundDecimal(normalized, atLeastOneCent ? 2 : 6)}`;
+}
+
 function tokenMetadata(option) {
   const declaredSymbol = safeTokenSymbol(option.extra?.name);
   const canonicalSymbol =
@@ -593,6 +617,8 @@ function publicReadyOptions(ready) {
   return ready.map((option, index) => {
     const amount = normalizeDecimal(option.amount);
     const currentBalance = normalizeDecimal(option.currentBalance);
+    const amountUsd = normalizeDecimal(option.amountUsd);
+    const currentBalanceUsd = normalizeDecimal(option.currentBalanceUsd);
     return {
       displayIndex: index + 1,
       network: option.network,
@@ -603,14 +629,16 @@ function publicReadyOptions(ready) {
         amount == null
           ? null
           : `${amount}${option.tokenSymbol ? ` ${option.tokenSymbol}` : ""}`,
-      amountUsd: normalizeDecimal(option.amountUsd),
+      amountUsd,
+      amountUsdLabel: formatUsdLabel(amountUsd),
       payTo: option.payTo,
       currentBalance,
       balanceLabel:
         currentBalance == null
           ? null
           : `${currentBalance}${option.tokenSymbol ? ` ${option.tokenSymbol}` : ""}`,
-      currentBalanceUsd: normalizeDecimal(option.currentBalanceUsd),
+      currentBalanceUsd,
+      balanceUsdLabel: formatUsdLabel(currentBalanceUsd),
       needApproveFirst: option.needApproveFirst,
     };
   });
