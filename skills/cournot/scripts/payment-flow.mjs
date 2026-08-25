@@ -1,7 +1,3 @@
-#!/usr/bin/env node
-
-import { pathToFileURL } from "node:url";
-
 function fail(message) {
   throw new Error(message);
 }
@@ -220,71 +216,5 @@ export function assertUnusedNonce(nonce, usedNonces) {
 export function assertSameProbabilityRequest(original, replay) {
   if (JSON.stringify(original) !== JSON.stringify(replay)) {
     fail("Paid replay must use the exact original probability request body");
-  }
-}
-
-function parseArgs(argv) {
-  const [command, ...rest] = argv;
-  const args = {};
-  for (let index = 0; index < rest.length; index += 2) {
-    const key = rest[index];
-    const value = rest[index + 1];
-    if (!key?.startsWith("--") || value == null) {
-      fail("Arguments must use --name value pairs");
-    }
-    args[key.slice(2)] = value;
-  }
-  return { command, args };
-}
-
-function parseJsonArg(value, label) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    fail(`${label} must be valid JSON`);
-  }
-}
-
-function runCli() {
-  const { command, args } = parseArgs(process.argv.slice(2));
-  if (command === "inspect") {
-    const wallets = args.wallets ? parseJsonArg(args.wallets, "wallets") : [];
-    console.log(JSON.stringify(planPayment(args.requirements, wallets), null, 2));
-    return;
-  }
-  if (command === "normalize") {
-    const selectedIndex = Number(args["selected-index"]);
-    const envelope = parseJsonArg(args.envelope, "envelope");
-    const payment = normalizePaymentEnvelope(
-      envelope,
-      args.requirements,
-      selectedIndex
-    );
-    console.log(
-      JSON.stringify(
-        {
-          payment,
-          paymentHeaderValue: Buffer.from(
-            JSON.stringify(payment),
-            "utf8"
-          ).toString("base64"),
-        },
-        null,
-        2
-      )
-    );
-    return;
-  }
-  fail(
-    "Usage: payment-flow.mjs inspect --requirements <base64> [--wallets <json>] | normalize --requirements <base64> --selected-index <n> --envelope <json>"
-  );
-}
-
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
-  try {
-    runCli();
-  } catch (error) {
-    console.error(error.message);
-    process.exitCode = 1;
   }
 }

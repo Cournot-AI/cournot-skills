@@ -1,6 +1,6 @@
 ---
 name: cournot
-description: Query Cournot prediction-market probabilities through resolve and probability APIs, including every x402 payment option returned by the server without hard-coded payment addresses or a default network. Use when the user runs /cournot, explicitly says to use Cournot, or asks Cournot for an event probability. Do not invoke on casual odds questions — probability is paid after free quota.
+description: Query Cournot prediction-market probabilities through resolve and probability APIs, with paid requests executed by an isolated wallet client after explicit confirmation. Use when the user runs /cournot, explicitly says to use Cournot, or asks Cournot for an event probability. Do not invoke on casual odds questions — probability is paid after free quota.
 ---
 
 # Cournot
@@ -18,7 +18,7 @@ API base: `https://dev-interface.cournot.ai`
 ## Workflow
 
 1. For every request, read [references/query-flow.md](references/query-flow.md) and follow resolve, disambiguation, and probability handling.
-2. Only when probability returns HTTP 402, read [references/payment.md](references/payment.md). The fresh `PAYMENT-REQUIRED` header is the sole payment source of truth. Inspect every returned option, never hard-code payment addresses or default to a network, and require the user to choose and confirm before signing.
+2. Send probability requests only through `scripts/cournot-client.mjs`, which returns either the result or a sanitized payment preview. Only for a payment preview, read [references/payment.md](references/payment.md). Never request, read, print, transform, or relay wallet credentials; the client keeps them outside the model context.
 3. When probability succeeds, read [references/response-format.md](references/response-format.md) and render only the returned assessment and evidence.
 
 Preserve the pending event text and selected market ids across disambiguation, wallet setup, and payment confirmation so the user does not need to enter them again.
