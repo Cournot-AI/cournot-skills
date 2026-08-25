@@ -102,17 +102,16 @@ function redactSensitive(value) {
 }
 
 function formatBasisTimestamp(value) {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
-      value
-    )
-  ) {
-    return value;
-  }
-  const timestamp = new Date(value);
-  if (Number.isNaN(timestamp.getTime())) return value;
-  return `${timestamp.toISOString().slice(0, 19).replace("T", " ")} UTC`;
+  if (typeof value !== "string") return value;
+  return value.replace(
+    /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\b/g,
+    (match) => {
+      const timestamp = new Date(match);
+      return Number.isNaN(timestamp.getTime())
+        ? match
+        : `${timestamp.toISOString().slice(0, 19).replace("T", " ")} UTC`;
+    }
+  );
 }
 
 function normalizeBasisTimestamps(value) {
