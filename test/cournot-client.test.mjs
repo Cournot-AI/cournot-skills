@@ -192,7 +192,12 @@ test("free probability response completes without touching the wallet", async ()
         data: {
           result: { point_estimate: 0.61 },
           basis: [
-            { source: "mock", time: "2000-01-01T20:00:00Z" },
+            {
+              source: "mock",
+              summary:
+                "Market ends 2027-01-01T05:00:00Z; observed at 2000-01-01T21:00:00+01:00.",
+              time: "2000-01-01T20:00:00Z",
+            },
             { source: "offset", time: "2000-01-01T21:00:00+01:00" },
           ],
           probability: {
@@ -223,6 +228,10 @@ test("free probability response completes without touching the wallet", async ()
   assert.deepEqual(
     result.response.data.basis.map(({ time }) => time),
     ["2000-01-01 20:00:00 UTC", "2000-01-01 20:00:00 UTC"]
+  );
+  assert.equal(
+    result.response.data.basis[0].summary,
+    "Market ends 2027-01-01 05:00:00 UTC; observed at 2000-01-01 20:00:00 UTC."
   );
   assert.doesNotMatch(JSON.stringify(result.response.data.basis), /T20:|Z"/);
   assert.equal(
