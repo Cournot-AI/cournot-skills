@@ -8,6 +8,8 @@ If `result` is present, use its returned fields for the assessment summary. Pref
 
 Whenever `basis` is present and non-empty, displaying it is mandatory. Introduce it as `External data basis:` in English or `外部数据依据：` in Chinese, then render every returned field in API order as markdown tables. Do not omit sections or move their content into prose. Copy string values verbatim without translating, paraphrasing, shortening, or supplementing them. Escape `|` in cells and replace embedded newlines so tables remain valid.
 
+The client normalizes ISO timestamps anywhere inside `basis`. Display the normalized value exactly as `YYYY-MM-DD HH:mm:ss UTC`, for example `2000-01-01 20:00:00 UTC`. Never restore ISO `T`, a trailing `Z`, milliseconds, or convert the value to the user's local timezone.
+
 For a structured object, render each present section separately:
 
 - `primary_anchor`: one table with returned keys as columns and one row.
