@@ -10,7 +10,7 @@ Install the Cournot skill with its dedicated installer:
 npx cournot-skills add Cournot-AI/cournot-skills/skills/cournot
 ```
 
-The installer detects supported agents such as Codex and Claude Code and lets you choose where to install the skill. After a successful fresh installation, the wrapper prints the Cournot welcome message. To install it globally without prompts for Codex:
+The installer detects supported agents such as Codex and Claude Code and lets you choose where to install the skill. To install it globally without prompts for Codex:
 
 ```bash
 npx cournot-skills add Cournot-AI/cournot-skills/skills/cournot --global --agent codex --yes
@@ -24,7 +24,7 @@ The generic skills installer remains available as a fallback:
 npx skills add Cournot-AI/cournot-skills/skills/cournot
 ```
 
-The generic installer remains available when the dedicated wrapper's welcome output is not needed.
+The generic installer remains available as an alternative.
 
 ## Usage
 
@@ -68,13 +68,11 @@ Cournot never asks for a private key or seed phrase and never holds user funds. 
 
 ## Repository Structure
 
-The npm wrapper invokes the pinned `skills` CLI with copy mode and prints its own welcome text only after a fresh successful installation.
+The npm wrapper invokes the pinned `skills` CLI with copy mode.
 
 ```text
 ├── bin/
 │   └── cournot-skills.mjs
-├── lib/
-│   └── welcome.mjs
 ├── skills/
 │   └── cournot/
 │       ├── SKILL.md
@@ -83,7 +81,7 @@ The npm wrapper invokes the pinned `skills` CLI with copy mode and prints its ow
 │           ├── query-flow.md
 │           └── response-format.md
 └── test/
-    └── welcome.test.mjs
+    └── payment-flow.test.mjs
 ```
 
 ## Disclaimer

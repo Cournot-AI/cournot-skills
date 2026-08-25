@@ -6,12 +6,6 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  findNewCournotSkillPaths,
-  parseSkillList,
-  renderWelcome,
-} from "../lib/welcome.mjs";
-
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageJson = JSON.parse(
   readFileSync(join(packageRoot, "package.json"), "utf8")
@@ -19,7 +13,7 @@ const packageJson = JSON.parse(
 const args = process.argv.slice(2);
 
 function printHelp() {
-  console.log(`Install the Cournot agent skill and show its welcome message.
+  console.log(`Install the Cournot agent skill.
 
 Usage:
   npx cournot-skills add <source> [skills add options]
@@ -29,8 +23,7 @@ Examples:
   npx cournot-skills add Cournot-AI/cournot-skills/skills/cournot --global --agent codex --yes
 
 The wrapper forwards the source and options to the skills CLI and always uses
-copy mode. A successful fresh Cournot installation prints the welcome message
-from this wrapper; an overwrite or failed installation does not.`);
+copy mode.`);
 }
 
 if (args.includes("--help") || args.includes("-h")) {
@@ -54,35 +47,6 @@ const require = createRequire(import.meta.url);
 const skillsPackageRoot = dirname(require.resolve("skills/package.json"));
 const skillsCli = join(skillsPackageRoot, "bin", "cli.mjs");
 const forwardedOptions = options.filter((option) => option !== "--copy");
-
-function listInstalledSkills(extraArgs = []) {
-  const listed = spawnSync(
-    process.execPath,
-    [skillsCli, "list", ...extraArgs, "--json"],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      encoding: "utf8",
-      maxBuffer: 10 * 1024 * 1024,
-    }
-  );
-
-  if (listed.status !== 0 || listed.error) {
-    return [];
-  }
-
-  try {
-    return parseSkillList(listed.stdout);
-  } catch {
-    return [];
-  }
-}
-
-function snapshotInstalledSkills() {
-  return [...listInstalledSkills(), ...listInstalledSkills(["--global"])];
-}
-
-const beforeInstall = snapshotInstalledSkills();
 const result = spawnSync(
   process.execPath,
   [skillsCli, "add", source, "--copy", ...forwardedOptions],
@@ -101,11 +65,4 @@ if (result.error) {
 }
 
 const exitCode = result.status ?? 1;
-const afterInstall = exitCode === 0 ? snapshotInstalledSkills() : [];
-const newSkillPaths = findNewCournotSkillPaths(beforeInstall, afterInstall);
-
-if (newSkillPaths.length > 0) {
-  console.log(`\n${renderWelcome()}\n`);
-}
-
 process.exit(exitCode);
