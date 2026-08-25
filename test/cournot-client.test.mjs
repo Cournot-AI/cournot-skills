@@ -386,6 +386,38 @@ test("a disconnected wallet stops before preview or intent creation", async () =
   assert.equal("intentId" in prepared, false);
 });
 
+test("an installed wallet command failure does not show the wallet chooser again", async () => {
+  let previewCalls = 0;
+  const commandFailed = new Error("timeout details must stay internal");
+  commandFailed.code = "WALLET_COMMAND_FAILED";
+  const { prepared } = await preparedPayment({
+    walletImpl: wallet({
+      preflight() {
+        throw commandFailed;
+      },
+      preview() {
+        previewCalls += 1;
+      },
+    }),
+  });
+
+  assert.equal(prepared.state, "wallet_blocked");
+  assert.deepEqual(prepared.blockers, [
+    {
+      scope: "wallet",
+      wallet: "Binance Agentic Wallet",
+      operation: "preflight",
+      status: "ACTION_REQUIRED",
+      reasons: ["WALLET_COMMAND_FAILED"],
+    },
+  ]);
+  assert.equal("walletSetup" in prepared, false);
+  assert.equal("presentation" in prepared, false);
+  assert.doesNotMatch(JSON.stringify(prepared), /timeout details must stay internal/);
+  assert.equal(previewCalls, 0);
+  assert.equal("intentId" in prepared, false);
+});
+
 test("Chinese no-wallet presentation is deterministic and human-readable", async () => {
   const paymentRequirements = {
     x402Version: 2,

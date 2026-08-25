@@ -698,6 +698,26 @@ function publicBlockers(blockers) {
   }));
 }
 
+function walletFailureResult({ error, operation, request, serverOptions }) {
+  const reason = error?.code || "WALLET_COMMAND_FAILED";
+  if (reason === "WALLET_UNAVAILABLE") {
+    return walletRequiredResult({ request, reason, serverOptions });
+  }
+  return {
+    state: "wallet_blocked",
+    serverOptions,
+    blockers: [
+      {
+        scope: "wallet",
+        wallet: "Binance Agentic Wallet",
+        operation,
+        status: "ACTION_REQUIRED",
+        reasons: [reason],
+      },
+    ],
+  };
+}
+
 export async function prepareProbability({
   request,
   fetchImpl = fetch,
@@ -724,9 +744,10 @@ export async function prepareProbability({
     try {
       preflight = wallet.preflight();
     } catch (error) {
-      return walletRequiredResult({
+      return walletFailureResult({
+        error,
+        operation: "preflight",
         request: originalRequest,
-        reason: error.code || "WALLET_UNAVAILABLE",
         serverOptions,
       });
     }
@@ -743,9 +764,10 @@ export async function prepareProbability({
   try {
     preview = wallet.preview(initial.paymentRequired);
   } catch (error) {
-    return walletRequiredResult({
+    return walletFailureResult({
+      error,
+      operation: "preview",
       request: originalRequest,
-      reason: error.code || "WALLET_UNAVAILABLE",
       serverOptions,
     });
   }
