@@ -25,6 +25,44 @@ const INTENT_TTL_MS = 30 * 60 * 1000;
 const APPROVAL_WAIT_MS = 45 * 1000;
 const APPROVAL_POLL_MS = 3 * 1000;
 
+const NETWORK_METADATA = {
+  "eip155:8453": { name: "Base mainnet", environment: "mainnet" },
+  "eip155:84532": { name: "Base Sepolia", environment: "testnet" },
+  "eip155:56": { name: "BNB Smart Chain mainnet", environment: "mainnet" },
+};
+
+const TOKEN_METADATA = new Map(
+  [
+    ["eip155:8453", "USDC", 6],
+    ["eip155:84532", "USDC", 6],
+    ["eip155:56", "USD1", 18],
+  ].map(([network, symbol, decimals]) => [
+    `${network}:${symbol}`,
+    { symbol, decimals },
+  ])
+);
+
+const WALLET_SETUP_OPTIONS = [
+  {
+    id: "binance-agentic-wallet",
+    name: "Binance Agentic Wallet",
+    recommended: true,
+    url: "https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet",
+  },
+  {
+    id: "x402-buyer-quickstart",
+    name: "x402 Foundation Buyer Quickstart",
+    recommended: false,
+    url: "https://docs.x402.org/getting-started/quickstart-for-buyers",
+  },
+  {
+    id: "viem-local-accounts",
+    name: "viem Local Accounts",
+    recommended: false,
+    url: "https://viem.sh/docs/accounts/local",
+  },
+];
+
 function fail(message, code = "INVALID_INPUT") {
   const error = new Error(message);
   error.code = code;
@@ -270,16 +308,192 @@ export function createFileIntentStore({
   };
 }
 
+function safeTokenSymbol(value) {
+  return typeof value === "string" && /^[A-Za-z0-9 ._-]{1,32}$/.test(value)
+    ? value
+    : null;
+}
+
+function tokenMetadata(option) {
+  const declaredSymbol = safeTokenSymbol(option.extra?.name);
+  const canonicalSymbol =
+    declaredSymbol === "USD Coin" ? "USDC" : declaredSymbol;
+  const known = TOKEN_METADATA.get(`${option.network}:${canonicalSymbol}`);
+  const declaredDecimals = Number(option.extra?.decimals);
+  const decimals =
+    known?.decimals ??
+    (Number.isInteger(declaredDecimals) &&
+    declaredDecimals >= 0 &&
+    declaredDecimals <= 36
+      ? declaredDecimals
+      : null);
+  return {
+    symbol: known?.symbol ?? canonicalSymbol,
+    decimals,
+  };
+}
+
+function formatUnits(value, decimals) {
+  if (!/^\d+$/.test(String(value)) || !Number.isInteger(decimals)) return null;
+  const padded = String(value).padStart(decimals + 1, "0");
+  const whole = decimals === 0 ? padded : padded.slice(0, -decimals);
+  const fraction = decimals === 0 ? "" : padded.slice(-decimals).replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
 function publicServerOptions(requirements) {
   return enumeratePaymentOptions(requirements).map((option, index) => ({
+    originalIndex: index,
     displayIndex: index + 1,
     scheme: option.scheme,
     network: option.network,
+    networkName: NETWORK_METADATA[option.network]?.name ?? option.network,
+    networkEnvironment:
+      NETWORK_METADATA[option.network]?.environment ?? "unknown",
     asset: option.asset,
-    amount: option.amount,
+    ...(() => {
+      const metadata = tokenMetadata(option);
+      const displayAmount = formatUnits(option.amount, metadata.decimals);
+      return {
+        tokenSymbol: metadata.symbol,
+        displayAmount,
+        amountLabel: displayAmount
+          ? `${displayAmount}${metadata.symbol ? ` ${metadata.symbol}` : ""}`
+          : `${option.amount} base units${metadata.symbol ? ` ${metadata.symbol}` : ""}`,
+      };
+    })(),
     payTo: option.payTo,
     assetTransferMethod: option.extra?.assetTransferMethod ?? null,
   }));
+}
+
+function publicWalletSetup(reason, walletStatus = null) {
+  return {
+    walletStatus,
+    options: WALLET_SETUP_OPTIONS.map((option) => ({
+      ...option,
+      installed:
+        option.id === "binance-agentic-wallet"
+          ? reason !== "WALLET_UNAVAILABLE"
+          : null,
+      connected:
+        option.id === "binance-agentic-wallet"
+          ? walletStatus === "CONNECTED"
+          : null,
+    })),
+    actions: ["connect_or_install", "configure_x402_buyer", "connect_other_wallet", "stop"],
+  };
+}
+
+function markdownCell(value) {
+  return String(value ?? "")
+    .replace(/\r?\n/g, " ")
+    .replace(/\|/g, "\\|");
+}
+
+function walletRequiredPresentation({ request, reason, walletStatus, serverOptions }) {
+  const chinese = /[\u3400-\u9fff]/u.test(request.message);
+  const rows = serverOptions
+    .map((option) => {
+      const environment =
+        option.networkEnvironment === "mainnet"
+          ? chinese
+            ? "主网"
+            : "mainnet"
+          : option.networkEnvironment === "testnet"
+            ? chinese
+              ? "测试网"
+              : "testnet"
+            : chinese
+              ? "环境未知"
+              : "environment unknown";
+      const asset = option.tokenSymbol
+        ? `${option.tokenSymbol} — \`${markdownCell(option.asset)}\``
+        : `\`${markdownCell(option.asset)}\``;
+      return `| ${option.originalIndex} | ${markdownCell(option.networkName)}（\`${markdownCell(option.network)}\`，${environment}） | ${asset} | ${markdownCell(option.amountLabel)} | \`${markdownCell(option.payTo)}\` |`;
+    })
+    .join("\n");
+  const hasMainnet = serverOptions.some(
+    (option) => option.networkEnvironment === "mainnet"
+  );
+  const binanceStatus =
+    reason === "WALLET_UNAVAILABLE"
+      ? chinese
+        ? "尚未安装"
+        : "not installed"
+      : walletStatus === "UNCONNECTED"
+        ? chinese
+          ? "已安装，目前未登录"
+          : "installed, currently signed out"
+        : chinese
+          ? "当前不可用"
+          : "currently unavailable";
+
+  if (chinese) {
+    return `Cournot 免费额度已耗尽，本次未获得概率结果，也未发生任何付款。
+
+可用付款路线：
+
+| 原始索引 | 网络 | 资产 | 金额 | 收款地址 |
+|---|---|---|---|---|
+${rows}
+${hasMainnet ? "\n主网付款会转移真实资产。" : ""}
+
+可选设置方式：
+
+- 推荐：[Binance Agentic Wallet](https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet)（${binanceStatus}）
+- [x402 Foundation Buyer Quickstart](https://docs.x402.org/getting-started/quickstart-for-buyers)
+- [viem Local Accounts](https://viem.sh/docs/accounts/local)
+
+可选操作：
+
+1. 连接或安装 Binance Agentic Wallet
+2. 配置 x402 Buyer Quickstart 和 viem Local Accounts
+3. 连接其他兼容钱包
+4. 停止，不付款
+
+${walletStatus === "UNCONNECTED" ? "如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。" : "请选择一种设置方式，或选择停止。"}`;
+  }
+
+  return `Cournot free quota is exhausted. No probability was obtained and no payment occurred.
+
+Available payment routes:
+
+| Original index | Network | Asset | Amount | Recipient |
+|---|---|---|---|---|
+${rows}
+${hasMainnet ? "\nMainnet payment transfers real assets." : ""}
+
+Setup options:
+
+- Recommended: [Binance Agentic Wallet](https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet) (${binanceStatus})
+- [x402 Foundation Buyer Quickstart](https://docs.x402.org/getting-started/quickstart-for-buyers)
+- [viem Local Accounts](https://viem.sh/docs/accounts/local)
+
+Available actions:
+
+1. Connect or install Binance Agentic Wallet
+2. Configure x402 Buyer Quickstart with viem Local Accounts
+3. Connect another compatible wallet
+4. Stop without paying
+
+${walletStatus === "UNCONNECTED" ? 'Reply "sign in to wallet" if you already have a Binance Agentic Wallet. If you have not created one, create it in the Binance App first.' : "Choose one setup option, or stop."}`;
+}
+
+function walletRequiredResult({ request, reason, walletStatus = null, serverOptions }) {
+  return {
+    state: "wallet_required",
+    reason,
+    ...(walletStatus ? { walletStatus } : {}),
+    serverOptions,
+    walletSetup: publicWalletSetup(reason, walletStatus),
+    presentation: walletRequiredPresentation({
+      request,
+      reason,
+      walletStatus,
+      serverOptions,
+    }),
+  };
 }
 
 function matchingAcceptIndex(requirements, originalAccept) {
@@ -375,30 +589,30 @@ export async function prepareProbability({
     try {
       preflight = wallet.preflight();
     } catch (error) {
-      return {
-        state: "wallet_required",
+      return walletRequiredResult({
+        request: originalRequest,
         reason: error.code || "WALLET_UNAVAILABLE",
         serverOptions,
-      };
+      });
     }
     if (preflight?.connected !== true) {
-      return {
-        state: "wallet_required",
+      return walletRequiredResult({
+        request: originalRequest,
         reason: "WALLET_NOT_CONNECTED",
         walletStatus: preflight?.status ?? "UNKNOWN",
         serverOptions,
-      };
+      });
     }
   }
   let preview;
   try {
     preview = wallet.preview(initial.paymentRequired);
   } catch (error) {
-    return {
-      state: "wallet_required",
+    return walletRequiredResult({
+      request: originalRequest,
       reason: error.code || "WALLET_UNAVAILABLE",
       serverOptions,
-    };
+    });
   }
   if (
     preview?.success !== true ||

@@ -38,11 +38,27 @@ Never execute without confirmation, silently switch an option, pay for a differe
 
 For `state=wallet_blocked`, report only the returned `blockers`. Do not infer another cause or silently switch routes.
 
-For `state=wallet_required`, explain that free quota is exhausted and show every `serverOptions` route with network, asset, amount, and recipient. Offer to install or connect a compatible wallet, or stop without paying. Do not automatically install software or create a wallet.
+For `state=wallet_required`, output the returned `presentation` verbatim as the complete user-facing response and stop. Do not rewrite, summarize, translate, reorder, merge, or omit any part of it. The client generates this stable presentation in the user's language and includes the requirements below.
 
-When a returned BNB Smart Chain route is compatible, recommend Binance Agentic Wallet:
+1. State that free quota is exhausted, no probability was obtained, and no payment occurred.
+2. Show every `serverOptions` entry in server order in one table with exactly these concepts: original index, network, asset, amount, and recipient.
+   - Network must include `networkName`, the exact `network`, and whether `networkEnvironment` is mainnet, testnet, or unknown. Warn that mainnet uses real assets.
+   - Asset must include `tokenSymbol` when non-null and the full `asset` contract address.
+   - Amount must use `amountLabel`. Never show protocol base-unit integers as a human payment amount and never label a column “raw amount” or “原始金额”. If `amountLabel` explicitly says `base units`, preserve that qualification because token decimals were unavailable.
+   - Recipient must use the complete `payTo` address.
+3. Always show all three `walletSetup.options`, in their returned order, with names and clickable URLs. Mark Binance Agentic Wallet as recommended. Do not omit x402 Foundation Buyer Quickstart or viem Local Accounts.
+4. Always offer these four actions: connect/install Binance Agentic Wallet, configure the x402 buyer with viem, connect another compatible wallet, or stop without paying.
+5. When responding in Chinese and Binance Agentic Wallet is installed but unconnected, end with this explicit action: `如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。` Do not replace `登录钱包` with a slash-separated label.
 
-`https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet`
+When Binance Agentic Wallet is installed but `walletStatus` is `UNCONNECTED`, say it is installed but not signed in. If the user already has an Agentic Wallet, offer “登录钱包” / “sign in to wallet”; the Binance flow will run `auth signin`, display its pairing code and link, then keep `auth verify` alive until confirmation. If the user has never created one, direct them to create it in the Binance App first.
+
+The required setup references are:
+
+- Recommended — Binance Agentic Wallet: `https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet`
+- x402 Foundation Buyer Quickstart: `https://docs.x402.org/getting-started/quickstart-for-buyers`
+- viem Local Accounts: `https://viem.sh/docs/accounts/local`
+
+Do not automatically install software, create a wallet, begin sign-in, or configure a signer without the user's choice.
 
 Install it only after an explicit request:
 
