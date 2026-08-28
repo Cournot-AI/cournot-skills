@@ -1,6 +1,25 @@
 ---
 name: cournot
-description: Query Cournot prediction-market probabilities through resolve and probability APIs, with paid requests executed by an isolated wallet client after explicit confirmation. Use when the user runs /cournot, explicitly says to use Cournot, or asks Cournot for an event probability. Do not invoke on casual odds questions — probability is paid after free quota.
+description: Query Cournot for an event probability and supporting evidence. Use only for /cournot or an explicit request to use Cournot, not for casual odds questions.
+metadata:
+  openclaw:
+    homepage: https://skill.cournot.ai/
+    requires:
+      bins:
+        - node
+    envVars:
+      - name: COURNOT_API_BASE
+        required: false
+        description: Optional API base override for testing; production usage defaults to interface.cournot.ai.
+      - name: COURNOT_EVAL_ID
+        required: false
+        description: Optional evaluation identifier used only with a non-production API base.
+      - name: COURNOT_WALLET_COMMAND
+        required: false
+        description: Optional compatible wallet command; defaults to baw when a paid request requires a wallet.
+      - name: COURNOT_INTENT_DIR
+        required: false
+        description: Optional directory for short-lived payment intent files; defaults to the operating system temporary directory.
 ---
 
 # Cournot
@@ -14,6 +33,12 @@ Cournot has no mispricing API. If the user asks whether a market is mispriced or
 Reply in the user's language. Ignore `/cournot` and API titles when detecting it.
 
 API base: `https://interface.cournot.ai`
+
+## Service and Runtime
+
+The Skill is free to install. Cournot is an external service with three free probability calls per account; after that, each probability call costs $0.01 through a supported x402 or b402 wallet flow. Resolve and disambiguation remain free. A wallet is optional until the free allowance is exhausted, and every payment requires explicit confirmation.
+
+The bundled client requires Node.js 22.20 or newer. It calls the Cournot API, stores short-lived single-use payment intents in the operating system's temporary directory, and invokes a compatible wallet command only for a confirmed paid request. It never requires an API key, private key, or seed phrase.
 
 ## Workflow
 
