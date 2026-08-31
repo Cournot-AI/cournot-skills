@@ -227,12 +227,73 @@ async function postProbability(fetchImpl, request, paymentHeader) {
   };
 }
 
-function runBaw(args) {
-  const walletCommand = process.env.COURNOT_WALLET_COMMAND || "baw";
-  const result = spawnSync(walletCommand, [...args, "--json"], {
+const WINDOWS_CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+
+function escapeWindowsCommand(value) {
+  const command = String(value);
+  if (/[\r\n]/.test(command)) {
+    fail("Wallet command cannot contain line breaks");
+  }
+  return command.replace(WINDOWS_CMD_META, "^$1");
+}
+
+function escapeWindowsArgument(value) {
+  let escaped = String(value);
+  if (/[\r\n]/.test(escaped)) {
+    fail("Wallet command arguments cannot contain line breaks");
+  }
+  escaped = escaped.replace(/(?=(\\+?)?)\1"/g, "$1$1\\\"");
+  escaped = escaped.replace(/(?=(\\+?)?)\1$/, "$1$1");
+  escaped = `"${escaped}"`.replace(WINDOWS_CMD_META, "^$1");
+  return escaped.replace(WINDOWS_CMD_META, "^$1");
+}
+
+function walletInvocation(command, args, platform, comspec) {
+  if (platform !== "win32") return { command, args, windows: false };
+
+  const commandLine = [
+    escapeWindowsCommand(command),
+    ...args.map(escapeWindowsArgument),
+  ].join(" ");
+  return {
+    command: comspec || "cmd.exe",
+    args: ["/d", "/s", "/c", `"${commandLine}"`],
+    windows: true,
+  };
+}
+
+export function runBaw(
+  args,
+  {
+    command = process.env.COURNOT_WALLET_COMMAND || "baw",
+    platform = process.platform,
+    comspec = process.env.ComSpec || process.env.COMSPEC,
+    spawn = spawnSync,
+  } = {}
+) {
+  const invocation = walletInvocation(
+    command,
+    [...args, "--json"],
+    platform,
+    comspec
+  );
+  if (invocation.windows) {
+    const available = spawn("where.exe", [command], {
+      encoding: "utf8",
+      shell: false,
+      windowsHide: true,
+    });
+    if (available.error || available.status !== 0) {
+      fail("Binance Agentic Wallet CLI is not installed", "WALLET_UNAVAILABLE");
+    }
+  }
+  const result = spawn(invocation.command, invocation.args, {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024,
     shell: false,
+    ...(invocation.windows
+      ? { windowsVerbatimArguments: true, windowsHide: true }
+      : {}),
   });
   if (result.error?.code === "ENOENT") {
     fail("Binance Agentic Wallet CLI is not installed", "WALLET_UNAVAILABLE");
@@ -737,7 +798,8 @@ export async function prepareProbability({
     fail("Cournot 402 response is missing PAYMENT-REQUIRED", "INVALID_402");
   }
 
-  const requirements = parsePaymentRequirements(initial.paymentRequired);
+  const paymentRequired = initial.paymentRequired.replaceAll(/\s/g, "");
+  const requirements = parsePaymentRequirements(paymentRequired);
   const serverOptions = publicServerOptions(requirements);
   if (typeof wallet.preflight === "function") {
     let preflight;
@@ -762,7 +824,7 @@ export async function prepareProbability({
   }
   let preview;
   try {
-    preview = wallet.preview(initial.paymentRequired);
+    preview = wallet.preview(paymentRequired);
   } catch (error) {
     return walletFailureResult({
       error,
