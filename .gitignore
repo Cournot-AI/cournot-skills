@@ -1,4 +1,5 @@
 # Local Cournot mock scenarios, runner, logs, and eval-only AGENTS.md.
 /skills/cournot/evals/
+/test/
 .DS_Store
 node_modules/
