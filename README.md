@@ -1,5 +1,7 @@
 # Cournot Skills
 
+[Website](https://skill.cournot.ai/) · [Skill source](skills/cournot/)
+
 Cournot gives AI agents fair-value probability estimates for prediction markets, together with the venue's current price and the external data behind the assessment.
 
 ## Installation
@@ -24,8 +26,6 @@ The generic skills installer remains available as a fallback:
 npx skills add Cournot-AI/cournot-skills/skills/cournot
 ```
 
-The generic installer remains available as an alternative.
-
 ## Usage
 
 Ask Cournot about a prediction-market event in plain language:
@@ -43,6 +43,14 @@ You can also explicitly ask your agent to use Cournot. If several markets match,
 - The external data sources behind the assessment
 
 Cournot returns the answer, not its proprietary algorithm.
+
+## Runtime Access
+
+- Requires Node.js 22.20 or newer.
+- Sends resolve and probability requests to `https://interface.cournot.ai`.
+- Stores short-lived payment intent data in the operating system's temporary directory; intents expire after 30 minutes and can be used only once.
+- Invokes a compatible wallet command only after the free allowance is exhausted and the user explicitly confirms a payment.
+- Does not require an API key and never needs access to a private key or seed phrase.
 
 ## Pricing
 
