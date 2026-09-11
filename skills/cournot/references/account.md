@@ -46,7 +46,7 @@ Both actions use the bundled client's wallet authentication flow. The client con
 
 Only a `state=complete` response from the corresponding `auth-execute` or `auth-status` establishes that the operation completed. A successful balance read does not prove rotation. Empty output or process exit code zero without JSON is not success: stop and report an unconfirmed operation rather than claiming that a key changed.
 
-For `signature_confirmation_required`, apply the shared customer-communication principles. The decision-relevant facts are the actual destination environment, public wallet, action and known effects. A successful rotation invalidates the old key on every device without changing remaining calls; account recovery reads and saves the current key without payment. Reveal a full key only for an explicit key request. Include any material returned risk or authority change, without interpreting absent fields as an assurance of no risk.
+For `signature_confirmation_required`, apply the shared customer-communication principles. The decision-relevant facts are the public wallet, action and known effects. A successful rotation invalidates the old key on every device without changing remaining calls; account recovery reads and saves the current key without payment. Reveal a full key only for an explicit key request. Include any material returned risk or authority change, without interpreting absent fields as an assurance of no risk.
 
 The client owns the signing payload and confirmation state. Keep protocol data internal and unchanged; obtain confirmation before execution. Payment authorization does not authorize key rotation.
 

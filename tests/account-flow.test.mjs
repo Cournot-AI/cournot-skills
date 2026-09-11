@@ -337,7 +337,8 @@ test("pack selection shows the development discount only for the development ori
     assert.equal(result.status, 0, result.stderr);
     const data = JSON.parse(result.stdout);
     assert.equal(data.base, base);
-    assert.ok(data.presentation.includes(`](${base})`));
+    assert.ok(!data.presentation.includes(base));
+    assert.doesNotMatch(data.presentation, /开发环境|正式环境|生产环境|自定义环境|Active environment|development|production|localhost/);
     assert.equal(data.presentation.includes("$0.01"), base === DEV_BASE);
     assert.match(data.presentation, /最新付款预览/);
     assert.match(data.presentation, /你想选择哪个套餐/);

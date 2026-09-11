@@ -541,12 +541,8 @@ function markdownCell(value) {
     .replace(/\|/g, "\\|");
 }
 
-function walletRequiredPresentation({ request, reason, walletStatus, serverOptions, base }) {
+function walletRequiredPresentation({ request, reason, walletStatus, serverOptions }) {
   const chinese = /[\u3400-\u9fff]/u.test(request.message);
-  const origin = apiBase(base);
-  const environment = origin === "https://dev-interface.cournot.ai" ? (chinese ? "开发环境" : "development")
-    : origin === "https://pro.cournot.ai" ? (chinese ? "正式环境" : "production") : (chinese ? "本地/自定义环境" : "local/custom");
-  const environmentLine = `${chinese ? "当前环境" : "Active environment"}: [${environment}](${origin})`;
   const rows = serverOptions
     .map((option) => {
       const asset = option.tokenSymbol
@@ -572,9 +568,7 @@ function walletRequiredPresentation({ request, reason, walletStatus, serverOptio
           : "currently unavailable";
 
   if (chinese) {
-    return `${environmentLine}
-
-${request.pack_id ? "购买流量包需要可用的钱包，尚未付款。" : "本次查询需要可用的钱包，尚未获得概率结果，也未发生任何付款。"}
+    return `${request.pack_id ? "购买流量包需要可用的钱包，尚未付款。" : "本次查询需要可用的钱包，尚未获得概率结果，也未发生任何付款。"}
 
 可用付款路线：
 
@@ -595,9 +589,7 @@ ${hasMainnet ? "\n主网付款会转移真实资产。" : ""}
 ${walletStatus === "UNCONNECTED" ? "如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。" : "请选择一种设置方式，或选择停止。"}`;
   }
 
-  return `${environmentLine}
-
-${request.pack_id ? "A wallet is required to purchase this pack. No payment occurred." : "A wallet is needed for this query. No probability was obtained and no payment occurred."}
+  return `${request.pack_id ? "A wallet is required to purchase this pack. No payment occurred." : "A wallet is needed for this query. No probability was obtained and no payment occurred."}
 
 Available payment routes:
 
@@ -1005,16 +997,12 @@ function packSelection(language = "en") {
   const base = apiBase();
   const zh = language === "zh";
   const dev = base === "https://dev-interface.cournot.ai";
-  const environment = dev ? (zh ? "开发环境" : "development")
-    : base === "https://pro.cournot.ai" ? (zh ? "正式环境" : "production") : (zh ? "本地/自定义环境" : "local/custom");
   const rows = PACKS.map(pack => `| ${pack.name} (${pack.pack_id}) | ${pack.calls.toLocaleString("en-US")} | $${pack.price_usd} |`).join("\n");
-  const presentation = `${zh ? "当前环境" : "Active environment"}: [${environment}](${base})
-
-| ${zh ? "套餐 | 次数 | 目录标价" : "Pack | Calls | List price"} |
+  const presentation = `| ${zh ? "套餐 | 次数 | 目录标价" : "Pack | Calls | List price"} |
 |---|---:|---:|
 ${rows}
 
-${dev ? (zh ? "仅在此开发环境，每个套餐收费 $0.01。" : "Only in this development environment, each pack costs $0.01. ") : ""}${zh ? "实际付款金额、资产和网络以随后展示的最新付款预览为准，确认后才会付款。" : "The latest payment preview determines the actual amount, asset and network; payment requires your confirmation."}
+${dev ? (zh ? "当前每个套餐收费 $0.01。" : "Each pack currently costs $0.01. ") : ""}${zh ? "实际付款金额、资产和网络以随后展示的最新付款预览为准，确认后才会付款。" : "The latest payment preview determines the actual amount, asset and network; payment requires your confirmation."}
 
 ${zh ? "次数永久有效、可叠加，购买后不退款。额度归付款钱包所有；购买成功后会在本机保存该钱包的密钥，可能替换现有密钥。若同时失去钱包访问权和密钥，将无法恢复。主网付款会使用真实资产。" : "Calls never expire, stack, and are non-refundable. Credit belongs to the paying wallet; purchase saves its key on this device and may replace an existing key. Losing both wallet access and the key prevents recovery. Mainnet payments use real assets."}
 
