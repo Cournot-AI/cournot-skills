@@ -6,6 +6,7 @@ import {
   mkdirSync,
   chmodSync,
   readFileSync,
+  realpathSync,
   renameSync,
   unlinkSync,
   writeFileSync,
@@ -20,7 +21,10 @@ import {
   parsePaymentRequirements,
 } from "./payment-flow.mjs";
 
-const PRODUCTION_API_BASE = "https://interface.cournot.ai";
+import {
+  apiBase, apiRequest, createCredentials, sanitize, responseState, PACKS,
+  accountResult, readAccount, prepareAccountAuth, executeAccountAuth, PRODUCTION_BASE,
+} from "./account-flow.mjs";
 const INTENT_TTL_MS = 30 * 60 * 1000;
 const APPROVAL_WAIT_MS = 45 * 1000;
 const APPROVAL_POLL_MS = 3 * 1000;
@@ -77,24 +81,7 @@ function sameValue(left, right) {
   return a === b;
 }
 
-function redactSensitive(value) {
-  if (Array.isArray(value)) return value.map(redactSensitive);
-  if (!isObject(value)) return value;
-
-  const output = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (
-      /^(paymentHeaderValue|signature|nonce|authorization|sessionToken|privateKey|seedPhrase)$/i.test(
-        key
-      )
-    ) {
-      output[key] = "[REDACTED]";
-    } else {
-      output[key] = redactSensitive(item);
-    }
-  }
-  return output;
-}
+const redactSensitive = sanitize;
 
 function formatBasisTimestamp(value) {
   if (typeof value !== "string") return value;
@@ -194,37 +181,14 @@ function validateProbabilityRequest(request) {
   return structuredClone(request);
 }
 
-async function readJsonResponse(response) {
-  const text = await response.text();
-  if (text.trim() === "") return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    fail("Cournot returned a non-JSON response", "INVALID_API_RESPONSE");
-  }
-}
-
-async function postProbability(fetchImpl, request, paymentHeader) {
-  const headers = { "content-type": "application/json" };
+async function postProbability(fetchImpl, request, paymentHeader, { base = apiBase(), key } = {}) {
+  const headers = {};
   if (paymentHeader) headers["PAYMENT-SIGNATURE"] = paymentHeader;
-  const testBase = process.env.COURNOT_API_BASE;
-  const apiBase =
-    testBase && /^http:\/\/127\.0\.0\.1:\d+$/.test(testBase)
-      ? testBase
-      : PRODUCTION_API_BASE;
-  if (apiBase !== PRODUCTION_API_BASE && process.env.COURNOT_EVAL_ID) {
+  if (key && !paymentHeader) headers["COURNOT-API-KEY"] = key;
+  if (base !== PRODUCTION_BASE && base !== "https://interface.cournot.ai" && process.env.COURNOT_EVAL_ID) {
     headers["X-Eval-Id"] = process.env.COURNOT_EVAL_ID;
   }
-  const response = await fetchImpl(`${apiBase}/intelligence/v1/probability`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(request),
-  });
-  return {
-    status: response.status,
-    body: await readJsonResponse(response),
-    paymentRequired: response.headers.get("payment-required"),
-  };
+  return apiRequest({ base, path: "probability", method: "POST", body: request, headers, fetchImpl });
 }
 
 const WINDOWS_CMD_META = /([()\][%!^"`<>&|;, *?])/g;
@@ -299,7 +263,9 @@ export function runBaw(
     fail("Binance Agentic Wallet CLI is not installed", "WALLET_UNAVAILABLE");
   }
   if (result.error || result.status !== 0) {
-    fail("Binance Agentic Wallet command failed", "WALLET_COMMAND_FAILED");
+    let code;
+    try { code = JSON.parse(result.stdout).error?.code; } catch {}
+    fail("Binance Agentic Wallet command failed", Number.isInteger(code) ? `WALLET_${code}` : "WALLET_COMMAND_FAILED");
   }
   try {
     return JSON.parse(result.stdout);
@@ -602,7 +568,7 @@ function walletRequiredPresentation({ request, reason, walletStatus, serverOptio
           : "currently unavailable";
 
   if (chinese) {
-    return `Cournot 免费额度已耗尽，本次未获得概率结果，也未发生任何付款。
+    return `${request.pack_id ? "购买流量包需要可用的钱包，尚未付款。" : "Cournot 免费额度已耗尽，本次未获得概率结果，也未发生任何付款。"}
 
 可用付款路线：
 
@@ -629,7 +595,7 @@ ${hasMainnet ? "\n主网付款会转移真实资产。" : ""}
 ${walletStatus === "UNCONNECTED" ? "如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。" : "请选择一种设置方式，或选择停止。"}`;
   }
 
-  return `Cournot free quota is exhausted. No probability was obtained and no payment occurred.
+  return `${request.pack_id ? "A wallet is required to purchase this pack. No payment occurred." : "Cournot free quota is exhausted. No probability was obtained and no payment occurred."}
 
 Available payment routes:
 
@@ -780,20 +746,37 @@ function walletFailureResult({ error, operation, request, serverOptions }) {
 }
 
 export async function prepareProbability({
-  request,
-  fetchImpl = fetch,
-  wallet = createBinanceWalletRunner(),
-  intents = createFileIntentStore(),
+  request, fetchImpl = fetch, wallet = createBinanceWalletRunner(),
+  intents = createFileIntentStore(), base = apiBase(), credentials = createCredentials(), perCall = false,
 } = {}) {
+  base = apiBase(base);
   const originalRequest = validateProbabilityRequest(request);
-  const initial = await postProbability(fetchImpl, originalRequest);
+  const key = perCall ? null : credentials.read(base).key;
+  const initial = await postProbability(fetchImpl, originalRequest, null, { base, key });
   if (initial.status !== 402) {
     return redactSensitive({
-      state: "complete",
-      httpStatus: initial.status,
+      state: responseState(initial), httpStatus: initial.status,
       response: normalizeResponseForDisplay(initial.body),
     });
   }
+  if (!perCall) return { state: key ? "pack_exhausted" : "payment_choice_required", choices: ["topup", "import", "per_call"] };
+  return preparePayment({ initial, originalRequest, base, path: "probability", wallet, intents });
+}
+
+export async function preparePack({ packId, language = "en", fetchImpl = fetch,
+  wallet = createBinanceWalletRunner(), intents = createFileIntentStore(), base = apiBase() } = {}) {
+  const pack = PACKS.find((item) => item.pack_id === String(packId).trim().toLowerCase());
+  if (!pack) fail("Select a valid pack: p5, p20, or p50");
+  base = apiBase(base);
+  const request = { pack_id: pack.pack_id };
+  const initial = await apiRequest({ base, path: "packs", method: "POST", body: request, fetchImpl });
+  if (initial.status !== 402) return { state: "api_error", httpStatus: initial.status, response: sanitize(initial.body) };
+  const result = await preparePayment({ initial, originalRequest: request, base, path: "packs", wallet, intents,
+    presentationRequest: { ...request, message: language === "zh" ? "购买" : "Purchase" } });
+  return { ...result, pack, base, notice: "Calls never expire and are non-refundable. Losing both wallet and key prevents recovery. Credit belongs to the paying wallet; its key replaces this machine's saved key after purchase. Development prices come from the actual payment preview." };
+}
+
+async function preparePayment({ initial, originalRequest, base, path, wallet, intents, presentationRequest = originalRequest }) {
   if (!initial.paymentRequired) {
     fail("Cournot 402 response is missing PAYMENT-REQUIRED", "INVALID_402");
   }
@@ -809,13 +792,13 @@ export async function prepareProbability({
       return walletFailureResult({
         error,
         operation: "preflight",
-        request: originalRequest,
+        request: presentationRequest,
         serverOptions,
       });
     }
     if (preflight?.connected !== true) {
       return walletRequiredResult({
-        request: originalRequest,
+        request: presentationRequest,
         reason: "WALLET_NOT_CONNECTED",
         walletStatus: preflight?.status ?? "UNKNOWN",
         serverOptions,
@@ -829,7 +812,7 @@ export async function prepareProbability({
     return walletFailureResult({
       error,
       operation: "preview",
-      request: originalRequest,
+      request: presentationRequest,
       serverOptions,
     });
   }
@@ -854,6 +837,7 @@ export async function prepareProbability({
   }
 
   const intentId = intents.save({
+    kind: "payment", base, path,
     request: originalRequest,
     requirements,
     walletPaymentId: preview.data.paymentId,
@@ -887,6 +871,7 @@ export async function executePayment({
   fetchImpl = fetch,
   wallet = createBinanceWalletRunner(),
   intents = createFileIntentStore(),
+  base = apiBase(), credentials = createCredentials(),
 } = {}) {
   if (confirmed !== true) {
     fail("Explicit user confirmation is required", "CONFIRMATION_REQUIRED");
@@ -897,6 +882,10 @@ export async function executePayment({
 
   const lease = intents.take(intentId);
   const intent = lease.value;
+  if (intent.kind !== "payment" || intent.base !== apiBase(base) || !["probability", "packs"].includes(intent.path)) {
+    lease.restore();
+    fail("Payment intent belongs to another operation or environment", "INTENT_MISMATCH");
+  }
   const selected = intent.ready[selectedOption - 1];
   if (!selected) {
     lease.restore();
@@ -940,17 +929,47 @@ export async function executePayment({
       fail("Wallet payment did not match the confirmed option", "PAYMENT_MISMATCH");
     }
 
-    const paid = await postProbability(fetchImpl, intent.request, paymentHeader);
-    const settled =
-      paid.status >= 200 && paid.status < 300 && paid.body?.code === 0;
+    if (intent.path === "packs") {
+      // Store the exact signed request before sending: recovery never signs or charges a new payment.
+      const recoveryId = intents.save({ kind: "pack_recovery", base: intent.base, request: intent.request, paymentHeader });
+      return recoverPack({ intentId: recoveryId, confirmed: true, base, credentials, intents, fetchImpl });
+    }
+    const paid = await postProbability(fetchImpl, intent.request, paymentHeader, { base: intent.base });
+    const settled = paid.status >= 200 && paid.status < 300 && paid.body?.code === 0;
     return redactSensitive({
-      state: settled ? "complete" : "payment_failed",
-      httpStatus: paid.status,
+      state: settled ? "complete" : "payment_failed", httpStatus: paid.status,
       response: normalizeResponseForDisplay(paid.body),
     });
   } finally {
     lease.consume();
   }
+}
+
+export async function recoverPack({ intentId, confirmed, base = apiBase(), credentials = createCredentials(),
+  intents = createFileIntentStore(), fetchImpl = fetch } = {}) {
+  if (confirmed !== true) fail("Explicit purchase recovery confirmation is required", "CONFIRMATION_REQUIRED");
+  const lease = intents.take(intentId);
+  const intent = lease.value;
+  if (intent.kind !== "pack_recovery" || intent.base !== apiBase(base)) {
+    lease.restore(); fail("Wrong recovery intent or environment", "INTENT_MISMATCH");
+  }
+  let response;
+  try {
+    response = await apiRequest({ base: intent.base, path: "packs", method: "POST", body: intent.request,
+      headers: { "PAYMENT-SIGNATURE": intent.paymentHeader }, fetchImpl });
+  } catch {
+    lease.restore();
+    return { state: "purchase_unknown", recoveryId: intentId, next: "Do not purchase again. Explicitly recover this same payment or check the paying wallet's account." };
+  }
+  if (responseState(response) !== "complete") {
+    lease.restore();
+    return { state: "purchase_unknown", recoveryId: intentId, httpStatus: response.status, response: sanitize(response.body),
+      next: "Do not sign a new payment. Check the wallet account or explicitly recover the same payment." };
+  }
+  lease.consume();
+  const result = accountResult(response, { base, credentials, save: true });
+  if (!result.hasKey) return { state: "credential_save_failed", next: "Purchase succeeded without a key. Recover via the paying wallet account; do not buy again." };
+  return { ...result, pack: response.body.data.pack, x402: sanitize(response.body.data.x402), charged: response.body.data.charged };
 }
 
 function parseArgs(argv) {
@@ -981,7 +1000,7 @@ function decodeRequest(value) {
 async function runCli() {
   const { command, args } = parseArgs(process.argv.slice(2));
   if (command === "prepare") {
-    return prepareProbability({ request: decodeRequest(args["request-base64"]) });
+    return prepareProbability({ request: decodeRequest(args["request-base64"]), perCall: args["per-call"] === "true" });
   }
   if (command === "execute") {
     return executePayment({
@@ -990,12 +1009,33 @@ async function runCli() {
       confirmed: args.confirmed === "true",
     });
   }
+  if (command === "packs") return { state: "pack_selection_required", base: apiBase(), packs: PACKS };
+  if (command === "topup") return preparePack({ packId: args.pack, language: args.language });
+  if (command === "recover-purchase") return recoverPack({ intentId: args.intent, confirmed: args.confirmed === "true" });
+  if (command === "balance" || command === "key") return readAccount({ reveal: command === "key" });
+  if (command === "import") {
+    if (Object.keys(args).length) fail("Import accepts the key on stdin only");
+    return readAccount({ importKey: readFileSync(0, "utf8").trim() });
+  }
+  if (command === "auth-prepare") return prepareAccountAuth({ action: args.action, reveal: args.reveal === "true", run: runBaw, intents: createFileIntentStore() });
+  if (command === "auth-execute" || command === "auth-status") return executeAccountAuth({ intentId: args.intent,
+    confirmed: args.confirmed === "true", poll: command === "auth-status", run: runBaw, intents: createFileIntentStore() });
+  if (command === "resolve") {
+    const response = await apiRequest({ path: "resolve", method: "POST", body: decodeRequest(args["request-base64"]) });
+    return { state: responseState(response), response: sanitize(response.body) };
+  }
   fail(
-    "Usage: cournot-client.mjs prepare --request-base64 <base64-json> | execute --intent <id> --selected-option <n> --confirmed true"
+    "Usage: cournot-client.mjs resolve|prepare --request-base64 <json-base64> [--per-call true] | packs | topup --pack <id> | execute --intent <id> --selected-option <n> --confirmed true | balance | key | import (stdin) | auth-prepare --action account|rotate | auth-execute --intent <id> --confirmed true | auth-status --intent <id> | recover-purchase --intent <id> --confirmed true"
   );
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+function isMain() {
+  try {
+    return !!process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch { return false; }
+}
+
+if (isMain()) {
   try {
     console.log(JSON.stringify(await runCli()));
   } catch (error) {
@@ -1003,7 +1043,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
       JSON.stringify({
         success: false,
         code: error.code || "COURNOT_CLIENT_ERROR",
-        message: error.message,
+        message: sanitize(error.message),
       })
     );
     process.exitCode = 1;

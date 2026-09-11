@@ -1,8 +1,40 @@
 # Payment flow
 
-Read this reference only when `scripts/cournot-client.mjs prepare` returns a payment state. The client is the trust boundary: it obtains fresh merchant requirements, talks to Binance Agentic Wallet, validates the selected route, and submits the paid replay without exposing wallet credentials to the model.
+Read for explicit topup, or after the user chooses per-call payment and the client returns a payment state. The client is the trust boundary: it obtains fresh merchant requirements, talks to Binance Agentic Wallet, validates the selected route, and submits the paid replay without exposing wallet credentials to the model.
 
 Never display, decode, transform, relay, or place wallet credentials in chat, command arguments, environment variables, or tool output. Never call the wallet signing command or the paid Cournot endpoint directly. If the client fails, report the sanitized error and stop.
+
+## Buy prepaid calls
+
+Only start purchase on explicit `/cournot topup` or an unambiguous request to buy a Cournot pack. Merely running out of calls is not authorization.
+
+```sh
+node <skill-root>/scripts/cournot-client.mjs packs
+```
+
+Show all returned tiers with call counts and list prices; wait for the user's choice. Never choose a tier or recommend the largest by default. Before purchase, explain that calls never expire, stack, and are non-refundable, and that losing both wallet access and key prevents recovery. Credit belongs to the **paying wallet**; successful purchase saves that wallet's key on this machine, which may replace an imported KOL or different-wallet key. This is not a transfer of credit to the currently imported key.
+
+```sh
+node <skill-root>/scripts/cournot-client.mjs topup --pack '<selected pack_id>' --language '<zh or en>'
+```
+
+Only `p5`, `p20`, `p50` are supported by the current catalog. Dev charges $0.01 per pack according to the backend contract, while the catalog shows the $5/$20/$50 list price; always confirm the actual amount and chain from the fresh server preview. Dev BSC can use real mainnet funds. Do not alter amounts to match the catalog.
+
+Use the shared payment confirmation and execute flow below. Purchase success saves credentials internally and returns the balance and a masked key. Report the save result and any environment override warning. Do not automatically rerun a pending probability request after topup.
+
+For `credential_save_failed`, explain that the purchase credited the wallet but the local key could not be saved. Follow wallet account recovery in [account.md](account.md); do not purchase or rotate again.
+
+For `purchase_unknown`, do not claim success or failure and do not create a new payment. Preserve `recoveryId`. The user can check the paying wallet with account recovery, or explicitly authorize recovery of the **same** signed payment:
+
+```sh
+node <skill-root>/scripts/cournot-client.mjs recover-purchase --intent '<recoveryId>' --confirmed true
+```
+
+Recovery reuses the original environment, SKU and payment authorization; no new wallet signature is created. The backend documents idempotence for the same payment. Recovery intents expire after 30 minutes; payment authorizations may expire earlier. If expired or still unresolved, report uncertainty and use account recovery/support rather than paying again. Never retry a recovery automatically.
+
+## Choose per-call payment
+
+On exhausted free or prepaid calls, first offer topup, import and per-call payment equally. Only after the user chooses per-call payment, invoke the original query's `prepare` command with `--per-call true`. Wallet setup is only needed after that choice. A malformed/expired key should instead be repaired or replaced; never silently fall back to payment.
 
 ## Payment preview
 
@@ -43,10 +75,10 @@ node <skill-root>/scripts/cournot-client.mjs execute --intent '<intentId>' --sel
 
 The command completes all mechanical steps internally and returns sanitized JSON:
 
-- `state=complete`: read `response` using `references/response-format.md`.
+- `state=complete`: for a probability intent, render `response` using `references/response-format.md`; for a pack intent, report returned pack, balance, masked key and save result.
 - `state=payment_failed`: report the returned failure and stop. Do not reuse the intent or retry automatically.
 - `state=approval_pending`: show the approval transaction hash. After it confirms, prepare a fresh payment; display and confirm any changed terms before executing again.
-- A command error consumes an intent once wallet authorization has begun. Prepare again rather than reusing it.
+- A command error consumes an intent once wallet authorization has begun. Do not automatically prepare or pay again. For purchases follow the recovery rules above; for probability calls report uncertainty and stop.
 
 Never execute without confirmation, silently switch an option, pay for a different resource, or make a second paid attempt.
 
@@ -56,13 +88,13 @@ For `state=wallet_blocked`, report only the returned `blockers` and stop. Do not
 
 For `state=wallet_required`, output the returned `presentation` as the complete user-facing response and stop. Preserve it verbatim except for the legacy display fallback above when it visibly contains a raw known network, long token name, or known base-unit amount. Do not otherwise rewrite, summarize, translate, reorder, merge, or omit any part of it. The client generates this stable presentation in the user's language and includes the requirements below.
 
-1. State that free quota is exhausted, no probability was obtained, and no payment occurred.
+1. For a per-call query, state that free quota is exhausted, no probability was obtained, and no payment occurred. For topup, state that a wallet is required and the pack has not been purchased; do not claim that free quota is exhausted.
 2. Show every `serverOptions` entry in server order in one table with exactly these concepts: original index, network, asset, amount, and recipient.
    - Network must use `networkLabel` exactly. Warn that mainnet uses real assets.
    - Asset must include `tokenSymbol` when non-null and the full `asset` contract address.
    - Amount must use `amountLabel`. Never show protocol base-unit integers as a human payment amount and never label a column “raw amount” or “原始金额”. If `amountLabel` explicitly says `base units`, preserve that qualification because token decimals were unavailable.
    - Recipient must use the complete `payTo` address.
-3. Always show all three `walletSetup.options`, in their returned order, with names and clickable URLs. Mark Binance Agentic Wallet as recommended. Do not omit x402 Foundation Buyer Quickstart or viem Local Accounts.
+3. When presenting wallet setup, show all three `walletSetup.options`, in their returned order, with names and clickable URLs. Mark Binance Agentic Wallet as recommended. Do not omit x402 Foundation Buyer Quickstart or viem Local Accounts.
 4. Always offer these four actions: connect/install Binance Agentic Wallet, configure the x402 buyer with viem after a separate setup confirmation, connect another compatible wallet, or stop without paying.
 5. When responding in Chinese and Binance Agentic Wallet is installed but unconnected, end with this explicit action: `如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。` Do not replace `登录钱包` with a slash-separated label.
 
