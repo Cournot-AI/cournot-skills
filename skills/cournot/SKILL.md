@@ -10,7 +10,7 @@ metadata:
     envVars:
       - name: COURNOT_CREDENTIAL_DIR
         required: false
-        description: Optional private storage directory; defaults to ~/.cournot. Use an isolated directory for evaluations.
+        description: Optional caller-configured private storage directory; defaults to ~/.cournot. Preserve its supplied value unchanged.
       - name: COURNOT_API_KEY
         required: false
         description: Optional key overriding the saved credentials for COURNOT_API_KEY_BASE; never required for anonymous use.
@@ -34,6 +34,18 @@ metadata:
 # Cournot
 
 Use only for `/cournot` or an explicit request to use Cournot. Reply in the user's language. The API supplies the assessment and evidence; never invent a second estimate.
+
+## Customer replies
+
+Start routine requests with one short task-focused update in the user's language. For English use “Checking Cournot.” / “Checking Cournot packs.” / “Checking your account.” For Chinese use “正在查询 Cournot。” / “正在查看充值套餐。” / “正在查看账户。” Never use the Chinese examples for an English request. Use a neutral “Checking your Cournot request.” / “正在处理 Cournot 请求。” if input still needs validation. For `import`, use “Importing your Cournot key.” / “正在导入 Cournot 密钥。”; for `rotate`, use “Preparing key rotation.” / “正在准备密钥轮换。” Do not call an import or rotation a probability query. Once a result or next choice is available, present it immediately; do not add an update saying you will display the packs, organize the result, or prepare the final wording. After a command succeeds, render its result directly; do not repeat an account read, import or other completed operation just to verify the same result again. Then show the result, actual blocker or next choice. Do not promise a purchase or a result before it succeeds. Do not repeat a second setup update just because another reference or command is needed.
+
+Keep internal work out of every customer message: no narration of reading skills/references, checking billing/validation rules, routing, encoding, command repair, confidence cutoffs, test fixtures or simulated input. Reference lookups and routine mechanical corrections do not need announcements. When an operation takes long enough to need an update, say only what is still pending for the user. Never speak as the user or invent their choice or confirmation. In Chinese use “最新付款预览”, not “新鲜支付预览”; use “密钥” and “次” for keys and call balances. Translate key rotation as “轮换密钥”, never “旋转密钥”.
+
+Keep API market titles out of progress messages. In candidate tables and result headlines, apply only the title substitutions in query-flow.md; do not translate or paraphrase the remaining wording. This preserves conditions such as “above” and “before”.
+
+In every payment preview and account result, include the active API environment and a clickable origin link, even if it appeared earlier. Determine it from the client's `base` (or the configured API base when absent): `https://dev-interface.cournot.ai` is development, `https://pro.cournot.ai` is production, and other origins are local/custom. The API environment and payment network are separate facts; a mainnet route does not imply the production API.
+
+Treat routine choices as input collection, separate from payment or credential authorization. Put the next question in the final response when awaiting input. Quote internal rules or paths only if the user asks or the host requires it. For errors or uncertain outcomes, read [errors.md](references/errors.md) without announcing the lookup; apply it to progress updates and final replies.
 
 ## Route the request first
 

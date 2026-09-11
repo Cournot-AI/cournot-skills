@@ -541,14 +541,18 @@ function markdownCell(value) {
     .replace(/\|/g, "\\|");
 }
 
-function walletRequiredPresentation({ request, reason, walletStatus, serverOptions }) {
+function walletRequiredPresentation({ request, reason, walletStatus, serverOptions, base }) {
   const chinese = /[\u3400-\u9fff]/u.test(request.message);
+  const origin = apiBase(base);
+  const environment = origin === "https://dev-interface.cournot.ai" ? (chinese ? "开发环境" : "development")
+    : origin === "https://pro.cournot.ai" ? (chinese ? "正式环境" : "production") : (chinese ? "本地/自定义环境" : "local/custom");
+  const environmentLine = `${chinese ? "当前环境" : "Active environment"}: [${environment}](${origin})`;
   const rows = serverOptions
     .map((option) => {
       const asset = option.tokenSymbol
         ? `${option.tokenSymbol} — \`${markdownCell(option.asset)}\``
         : `\`${markdownCell(option.asset)}\``;
-      return `| ${option.originalIndex} | ${markdownCell(option.networkLabel)} | ${asset} | ${markdownCell(option.amountLabel)} | \`${markdownCell(option.payTo)}\` |`;
+      return `| ${option.displayIndex} | ${markdownCell(option.networkLabel)} | ${asset} | ${markdownCell(option.amountLabel)} | \`${markdownCell(option.payTo)}\` |`;
     })
     .join("\n");
   const hasMainnet = serverOptions.some(
@@ -568,68 +572,62 @@ function walletRequiredPresentation({ request, reason, walletStatus, serverOptio
           : "currently unavailable";
 
   if (chinese) {
-    return `${request.pack_id ? "购买流量包需要可用的钱包，尚未付款。" : "Cournot 免费额度已耗尽，本次未获得概率结果，也未发生任何付款。"}
+    return `${environmentLine}
+
+${request.pack_id ? "购买流量包需要可用的钱包，尚未付款。" : "本次查询需要可用的钱包，尚未获得概率结果，也未发生任何付款。"}
 
 可用付款路线：
 
-| 原始索引 | 网络 | 资产 | 金额 | 收款地址 |
+| 付款路线 | 网络 | 资产 | 金额 | 收款地址 |
 |---|---|---|---|---|
 ${rows}
 ${hasMainnet ? "\n主网付款会转移真实资产。" : ""}
 
-可选设置方式：
+你可以选择：
 
-- 推荐：[Binance Agentic Wallet](https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet)（${binanceStatus}）
-- [x402 Foundation Buyer Quickstart](https://docs.x402.org/getting-started/quickstart-for-buyers)
-- [viem Local Accounts](https://viem.sh/docs/accounts/local)
-
-可选操作：
-
-1. 连接或安装 Binance Agentic Wallet
-2. 配置 x402 Buyer Quickstart 和 viem Local Accounts
-3. 连接其他兼容钱包
-4. 停止，不付款
+- 连接或安装 [Binance Agentic Wallet](https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet)（推荐；${binanceStatus}）
+- 使用 [x402 Foundation Buyer Quickstart](https://docs.x402.org/getting-started/quickstart-for-buyers) 和 [viem Local Accounts](https://viem.sh/docs/accounts/local) 配置钱包
+- 连接其他兼容钱包
+- 停止，不付款
 
 执行任何钱包设置前，我会展示具体操作和风险并再次确认；钱包设置确认不等于付款确认。
 
 ${walletStatus === "UNCONNECTED" ? "如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。" : "请选择一种设置方式，或选择停止。"}`;
   }
 
-  return `${request.pack_id ? "A wallet is required to purchase this pack. No payment occurred." : "Cournot free quota is exhausted. No probability was obtained and no payment occurred."}
+  return `${environmentLine}
+
+${request.pack_id ? "A wallet is required to purchase this pack. No payment occurred." : "A wallet is needed for this query. No probability was obtained and no payment occurred."}
 
 Available payment routes:
 
-| Original index | Network | Asset | Amount | Recipient |
+| Payment route | Network | Asset | Amount | Recipient |
 |---|---|---|---|---|
 ${rows}
 ${hasMainnet ? "\nMainnet payment transfers real assets." : ""}
 
-Setup options:
+Choose how to continue:
 
-- Recommended: [Binance Agentic Wallet](https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet) (${binanceStatus})
-- [x402 Foundation Buyer Quickstart](https://docs.x402.org/getting-started/quickstart-for-buyers)
-- [viem Local Accounts](https://viem.sh/docs/accounts/local)
-
-Available actions:
-
-1. Connect or install Binance Agentic Wallet
-2. Configure x402 Buyer Quickstart with viem Local Accounts
-3. Connect another compatible wallet
-4. Stop without paying
+- Connect or install [Binance Agentic Wallet](https://github.com/binance/binance-skills-hub/tree/main/skills/binance-web3/binance-agentic-wallet) (recommended; ${binanceStatus})
+- Configure a wallet using [x402 Foundation Buyer Quickstart](https://docs.x402.org/getting-started/quickstart-for-buyers) and [viem Local Accounts](https://viem.sh/docs/accounts/local)
+- Connect another compatible wallet
+- Stop without paying
 
 Before any wallet setup, I will show the exact action and risks and ask for separate confirmation. Wallet setup confirmation is not payment confirmation.
 
 ${walletStatus === "UNCONNECTED" ? 'Reply "sign in to wallet" if you already have a Binance Agentic Wallet. If you have not created one, create it in the Binance App first.' : "Choose one setup option, or stop."}`;
 }
 
-function walletRequiredResult({ request, reason, walletStatus = null, serverOptions }) {
+function walletRequiredResult({ request, reason, walletStatus = null, serverOptions, base }) {
   return {
     state: "wallet_required",
+    base,
     reason,
     ...(walletStatus ? { walletStatus } : {}),
     serverOptions,
     walletSetup: publicWalletSetup(reason, walletStatus),
     presentation: walletRequiredPresentation({
+      base,
       request,
       reason,
       walletStatus,
@@ -725,13 +723,14 @@ function publicBlockers(blockers) {
   }));
 }
 
-function walletFailureResult({ error, operation, request, serverOptions }) {
+function walletFailureResult({ error, operation, request, serverOptions, base }) {
   const reason = error?.code || "WALLET_COMMAND_FAILED";
   if (reason === "WALLET_UNAVAILABLE") {
-    return walletRequiredResult({ request, reason, serverOptions });
+    return walletRequiredResult({ request, reason, serverOptions, base });
   }
   return {
     state: "wallet_blocked",
+    base,
     serverOptions,
     blockers: [
       {
@@ -791,6 +790,7 @@ async function preparePayment({ initial, originalRequest, base, path, wallet, in
     } catch (error) {
       return walletFailureResult({
         error,
+        base,
         operation: "preflight",
         request: presentationRequest,
         serverOptions,
@@ -798,6 +798,7 @@ async function preparePayment({ initial, originalRequest, base, path, wallet, in
     }
     if (preflight?.connected !== true) {
       return walletRequiredResult({
+        base,
         request: presentationRequest,
         reason: "WALLET_NOT_CONNECTED",
         walletStatus: preflight?.status ?? "UNKNOWN",
@@ -811,6 +812,7 @@ async function preparePayment({ initial, originalRequest, base, path, wallet, in
   } catch (error) {
     return walletFailureResult({
       error,
+      base,
       operation: "preview",
       request: presentationRequest,
       serverOptions,
@@ -831,6 +833,7 @@ async function preparePayment({ initial, originalRequest, base, path, wallet, in
   if (ready.length === 0) {
     return {
       state: "wallet_blocked",
+      base,
       serverOptions,
       blockers: publicBlockers(blockers),
     };
@@ -845,6 +848,7 @@ async function preparePayment({ initial, originalRequest, base, path, wallet, in
   });
   return {
     state: "payment_confirmation_required",
+    base,
     intentId,
     serverOptions,
     options: publicReadyOptions(ready),
@@ -997,6 +1001,27 @@ function decodeRequest(value) {
   }
 }
 
+function packSelection(language = "en") {
+  const base = apiBase();
+  const zh = language === "zh";
+  const dev = base === "https://dev-interface.cournot.ai";
+  const environment = dev ? (zh ? "开发环境" : "development")
+    : base === "https://pro.cournot.ai" ? (zh ? "正式环境" : "production") : (zh ? "本地/自定义环境" : "local/custom");
+  const rows = PACKS.map(pack => `| ${pack.name} (${pack.pack_id}) | ${pack.calls.toLocaleString("en-US")} | $${pack.price_usd} |`).join("\n");
+  const presentation = `${zh ? "当前环境" : "Active environment"}: [${environment}](${base})
+
+| ${zh ? "套餐 | 次数 | 目录标价" : "Pack | Calls | List price"} |
+|---|---:|---:|
+${rows}
+
+${dev ? (zh ? "仅在此开发环境，每个套餐收费 $0.01。" : "Only in this development environment, each pack costs $0.01. ") : ""}${zh ? "实际付款金额、资产和网络以随后展示的最新付款预览为准，确认后才会付款。" : "The latest payment preview determines the actual amount, asset and network; payment requires your confirmation."}
+
+${zh ? "次数永久有效、可叠加，购买后不退款。额度归付款钱包所有；购买成功后会在本机保存该钱包的密钥，可能替换现有密钥。若同时失去钱包访问权和密钥，将无法恢复。主网付款会使用真实资产。" : "Calls never expire, stack, and are non-refundable. Credit belongs to the paying wallet; purchase saves its key on this device and may replace an existing key. Losing both wallet access and the key prevents recovery. Mainnet payments use real assets."}
+
+${zh ? "你想选择哪个套餐？" : "Which pack would you like?"}`;
+  return { state: "pack_selection_required", base, packs: PACKS, presentation };
+}
+
 async function runCli() {
   const { command, args } = parseArgs(process.argv.slice(2));
   if (command === "prepare") {
@@ -1009,7 +1034,7 @@ async function runCli() {
       confirmed: args.confirmed === "true",
     });
   }
-  if (command === "packs") return { state: "pack_selection_required", base: apiBase(), packs: PACKS };
+  if (command === "packs") return packSelection(args.language);
   if (command === "topup") return preparePack({ packId: args.pack, language: args.language });
   if (command === "recover-purchase") return recoverPack({ intentId: args.intent, confirmed: args.confirmed === "true" });
   if (command === "balance" || command === "key") return readAccount({ reveal: command === "key" });

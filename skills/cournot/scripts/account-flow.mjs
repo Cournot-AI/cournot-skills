@@ -111,10 +111,10 @@ export function responseState(response) {
 
 export function accountResult(response, { reveal = false, credentials, base, save = false } = {}) {
   const state = responseState(response);
-  if (state !== "complete") return { state, httpStatus: response.status, response: sanitize(response.body) };
+  if (state !== "complete") return { state, base, httpStatus: response.status, response: sanitize(response.body) };
   const data = response.body.data;
   if (!data || typeof data !== "object") fail("Missing account response data", "INVALID_API_RESPONSE");
-  const output = { state, wallet: data.wallet || null, balance: data.balance, maskedKey: maskKey(data.api_key), hasKey: !!data.api_key };
+  const output = { state, base, wallet: data.wallet || null, balance: data.balance, maskedKey: maskKey(data.api_key), hasKey: !!data.api_key };
   if (data.api_key && save) {
     try { Object.assign(output, credentials.save(base, data.api_key)); }
     catch { Object.assign(output, { state: "credential_save_failed", saved: false,
@@ -129,8 +129,8 @@ export function accountResult(response, { reveal = false, credentials, base, sav
 }
 
 export async function readAccount({ base = apiBase(), credentials = createCredentials(), fetchImpl = fetch, reveal = false, importKey } = {}) {
-  const active = importKey ? { key: validateKey(importKey.trim()), source: "import" } : credentials.read(base);
-  if (!active.key) return { state: "credential_missing", next: "Use wallet account recovery or import an existing key. Anonymous queries remain available." };
+  const active = importKey !== undefined ? { key: validateKey(importKey.trim()), source: "import" } : credentials.read(base);
+  if (!active.key) return { state: "credential_missing", base, next: "Use wallet account recovery or import an existing key. Anonymous queries remain available." };
   const response = await apiRequest({ base, path: "account", headers: { "COURNOT-API-KEY": active.key }, fetchImpl });
   if (responseState(response) === "complete" && response.body.data?.api_key !== active.key) {
     fail("Account returned a different key", "ACCOUNT_KEY_MISMATCH");

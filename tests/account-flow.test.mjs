@@ -102,6 +102,12 @@ test("credentials persist per origin, env overrides only its bound origin, and w
 test("import validates before saving, supports manual keys, and reveals only on explicit key read", async (t) => {
   const { credentials } = fixture(t);
   credentials.save(DEV_BASE, key);
+  for (const importKey of ["", " \n\t"]) {
+    await assert.rejects(readAccount({ credentials, importKey,
+      fetchImpl: async () => assert.fail("Empty import must not query the saved key"),
+    }), { code: "INVALID_KEY_FORMAT" });
+    assert.equal(credentials.read(DEV_BASE).key, key);
+  }
   const invalid = await readAccount({ credentials, importKey: otherKey,
     fetchImpl: async () => json({ code: 4100, msg: "api key is invalid" }) });
   assert.equal(invalid.state, "key_invalid");
@@ -312,5 +318,23 @@ test("evaluation storage and request headers stay isolated from real environment
   } finally {
     if (previous === undefined) delete process.env.COURNOT_EVAL_ID;
     else process.env.COURNOT_EVAL_ID = previous;
+  }
+});
+
+
+test("pack selection shows the development discount only for the development origin", () => {
+  const client = fileURLToPath(new URL("../skills/cournot/scripts/cournot-client.mjs", import.meta.url));
+  for (const base of [DEV_BASE, PRODUCTION_BASE, "http://127.0.0.1:8765"]) {
+    const result = spawnSync(process.execPath, [client, "packs", "--language", "zh"], {
+      env: { ...process.env, COURNOT_API_BASE: base }, encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const data = JSON.parse(result.stdout);
+    assert.equal(data.base, base);
+    assert.ok(data.presentation.includes(`](${base})`));
+    assert.equal(data.presentation.includes("$0.01"), base === DEV_BASE);
+    assert.match(data.presentation, /最新付款预览/);
+    assert.match(data.presentation, /你想选择哪个套餐/);
+    assert.match(data.presentation, /失去钱包访问权和密钥/);
   }
 });
