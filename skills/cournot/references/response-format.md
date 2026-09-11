@@ -43,7 +43,9 @@ External data basis:
 {Billing route and remaining calls from the returned fields.} This is an assessment of pricing, not investment advice.
 ```
 
-Use `data.billing` for the footer:
+Use `data.billing` for the footer. Its field names and the `charged` flag are internal interpretation rules, not text to print or explain to the customer. Use a short natural sentence such as “本次使用预付次数，剩余 586 次。” or “This used a free call; 2 remain.” Do not print `free_quota`, `api_key` or `charged=false` as billing labels.
+
+Interpret billing as follows:
 
 - `free_quota`: this query used the lifetime IP free allowance; show `free_quota.remaining` when present. No daily reset. If no prepaid balance was returned, omit it; do not call account solely to fill the footer.
 - `api_key`: this query used prepaid calls; show `api_key_quota.remaining` when present. `charged=false` means no on-chain payment, **not** no quota deduction.
