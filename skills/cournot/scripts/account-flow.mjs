@@ -171,7 +171,6 @@ export function prepareAccountAuth({ action, reveal = false, base = apiBase(), r
   const intentId = intents.save({ kind: "account_auth", base: apiBase(base), action, path, reveal: reveal && action === "account",
     address, typedData, requestId: preview.requestId, previewExpiresAt: preview.expiresAt });
   return { state: "signature_confirmation_required", intentId, action, base, wallet: address,
-    message: typedData.message, domain: typedData.domain, parsedMessage: sanitize(preview.parsedMessage),
     risks: sanitize(preview.risks), authorityChanges: sanitize(preview.authorityChanges),
     warning: action === "rotate" ? "Rotating invalidates the old key on every device immediately. Balance is unchanged. Use import for a new device." : "Authenticate to read and save this wallet's current Cournot key; no payment.",
   };

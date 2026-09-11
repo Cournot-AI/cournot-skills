@@ -222,10 +222,13 @@ test("purchase success with local save failure reports recovery instead of anoth
 test("EIP-712 recovery uses fixed typed data, normalizes 64+1 bytes, verifies wallet and masks key", async (t) => {
   const { intents, credentials } = fixture(t); const { run, calls } = authWallet();
   const prepared = prepareAccountAuth({ action: "account", run, intents });
+  const previewArgs = calls.find(args => args[1] === "preview");
+  const signedData = JSON.parse(JSON.parse(previewArgs[previewArgs.indexOf("--message") + 1]).params[1]);
+  assert.doesNotMatch(JSON.stringify(prepared), /parsedMessage|primaryType|domain|nonce|timestamp|urlPath/);
   const options = { intentId: prepared.intentId, run, intents, credentials, fetchImpl: async (url, init) => {
     assert.equal(url, `${DEV_BASE}/intelligence/v1/account`); assert.equal(init.method, "GET");
     assert.equal(init.headers["X-COURNOT-SIGNATURE"], `0x${"ab".repeat(64)}01`);
-    assert.equal(init.headers["X-COURNOT-NONCE"], prepared.message.nonce);
+    assert.equal(init.headers["X-COURNOT-NONCE"], signedData.message.nonce);
     return account();
   } };
   await assert.rejects(executeAccountAuth({ ...options, confirmed: false }), /confirmation/);
@@ -240,7 +243,10 @@ test("rotation waits for user confirmation and App completion without signing tw
   credentials.save(DEV_BASE, key);
   const prepared = prepareAccountAuth({ action: "rotate", run, intents });
   assert.match(prepared.warning, /every device/);
-  assert.equal(prepared.message.urlPath, "/intelligence/v1/key/rotate");
+  assert.doesNotMatch(JSON.stringify(prepared), /parsedMessage|primaryType|domain|nonce|timestamp|urlPath/);
+  const previewArgs = calls.find(args => args[1] === "preview");
+  const signedData = JSON.parse(JSON.parse(previewArgs[previewArgs.indexOf("--message") + 1]).params[1]);
+  assert.equal(signedData.message.urlPath, "/intelligence/v1/key/rotate");
   let posts = 0;
   const options = { intents, credentials, run, fetchImpl: async (url, init) => {
     posts++; assert.equal(url, `${DEV_BASE}/intelligence/v1/key/rotate`); assert.equal(init.method, "POST");

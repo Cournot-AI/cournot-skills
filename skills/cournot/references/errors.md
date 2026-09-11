@@ -2,7 +2,7 @@
 
 Apply this guide to every error in both progress updates and final replies. Use the user's language and ordinary product wording: what happened to their request, what is known about payment/calls/credentials, and the next useful action. Always include a concrete next action or question, including for wallet blockers. Usually two or three short sentences suffice. Avoid repeating an error in several updates.
 
-Do not print internal state names, error codes, raw server messages, HTTP statuses, JSON, intent/recovery IDs, file paths or implementation details in routine error replies. Preserve diagnostic fields internally for recovery. If the user explicitly requests troubleshooting or support details, provide relevant sanitized diagnostics separately; never expose secrets. This does not hide required payment-preview fields, complete route `networkLabel` values (including CAIP and mainnet/testnet labels), public transaction hashes or a host-required approval explanation.
+Do not print internal state names, error codes, raw server messages, HTTP statuses, JSON, intent/recovery IDs, file paths or implementation details in routine error replies. Preserve diagnostic fields internally for recovery. If the user explicitly requests troubleshooting or support details, provide relevant sanitized diagnostics separately; never expose secrets or signing payloads/parameters. Signing details remain internal even in troubleshooting. This does not hide required payment-preview fields, complete route `networkLabel` values (including CAIP and mainnet/testnet labels), public transaction hashes or a host-required approval explanation.
 
 Base the explanation on the returned state and known mappings below. An HTTP success status alone does not establish business success. A server error is not evidence of timeout, insufficient funds, expiry, a refund or a chain failure. For unfamiliar errors, say the requested operation could not be confirmed and offer an appropriate next step; do not invent a cause or copy the raw reason. Never retry, pay, rotate, recover or switch wallet automatically because an error occurred.
 
@@ -22,8 +22,4 @@ Base the explanation on the returned state and known mappings below. An HTTP suc
 | Account `8000` / `4400` / `22004` | Respectively: wallet authentication is invalid or expired; no key is registered for this wallet; this manually issued key cannot be self-rotated. Explain only the returned case; none means insufficient funds. |
 | `account_result_unknown` or failed connection during rotation | The key change is unconfirmed. Offer account recovery to inspect the current key; never repeat rotation. |
 
-Example for a Chinese Starter purchase with a returned settlement exception:
-
-> Starter 套餐暂未确认到账。支付服务返回异常，目前还无法确认是否扣款。为避免重复付款，你可以先查看付款钱包的套餐余额，或尝试恢复本次购买（沿用原支付授权）。你想先查看余额，还是恢复本次购买？
-
-Adapt to the evidence and user's language rather than copying a template into unrelated errors. A balance lookup alone may not prove whether a particular purchase settled; keep that uncertainty if the account result cannot establish it.
+A balance lookup alone may not prove whether a particular purchase settled; keep that uncertainty if the account result cannot establish it.
