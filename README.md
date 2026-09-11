@@ -46,21 +46,39 @@ Cournot returns the answer, not its proprietary algorithm.
 
 ## Runtime Access
 
-- Requires Node.js 22.20 or newer.
-- Sends resolve and probability requests to `https://interface.cournot.ai`.
-- Stores short-lived payment intent data in the operating system's temporary directory; intents expire after 30 minutes and can be used only once.
-- Invokes a compatible wallet command only after the free allowance is exhausted and the user explicitly confirms a payment.
-- Does not require an API key and never needs access to a private key or seed phrase.
+Requires Node.js 22.20 or newer. During development the default API is `https://dev-interface.cournot.ai`; explicitly set `COURNOT_API_BASE=https://pro.cournot.ai` for production. All calls use the bundled client.
 
-## Pricing
+No key or wallet is needed to start. Keys are stored in a user-level, per-origin file under `~/.cournot/credentials/`, shared across agents on the same OS account. These are plaintext files protected by filesystem permissions, not an encrypted vault. `COURNOT_API_KEY` can override the file for `COURNOT_API_KEY_BASE` (dev by default); set the key's base explicitly for production. Never put credentials in the project or commit them.
 
-Every account includes three free probability calls. This allowance does not reset. No setup or wallet is needed for those calls. After that, each call costs $0.01.
+## Pricing and account commands
 
-If Cournot cannot answer because no market matches or the inputs are too thin, it says so and you are not charged.
+Each IP gets three free probability calls **in total**, with no reset. Free calls are used before prepaid calls. Once exhausted, choose a pack, import an existing key, or explicitly approve a $0.01 per-call payment. No automatic topup or payment fallback.
+
+| Pack | List price | Calls |
+|---|---|---|
+| Starter | $5 | 600 |
+| Standard | $20 | 2,800 |
+| Scale | $50 | 8,000 |
+
+Prepaid calls stack, never expire and are non-refundable. Dev packs currently charge $0.01; the payment preview is authoritative and may still use real mainnet assets. Catalog changes require updating the skill.
+
+```text
+/cournot balance
+/cournot key
+/cournot import <key>
+/cournot topup
+/cournot rotate
+```
+
+Balance and normal results show masked keys; only `key` reveals the complete secret. Import verifies the key before replacing the saved file. Keys are shared across devices; rotation immediately invalidates the old key everywhere while retaining the wallet's balance. Recover a lost local key using wallet authentication, without rotating or purchasing again. Losing both wallet access and key prevents recovery.
+
+Wallet account recovery and rotation use EIP-712 authentication through Binance Agentic Wallet with Developer Mode enabled. The client previews the message for confirmation and keeps signatures out of model output. A configured key can query account balance without a wallet.
+
+Billing output distinguishes free allowance, prepaid consumption and on-chain payment. Missing quota information is not treated as zero. Requests are not automatically retried after a failure, because the billing outcome can be uncertain.
 
 ## Payments and Safety
 
-After the free calls, the agent needs its own wallet capable of signing x402 payments on Base or b402 payments on BNB Chain.
+Buying a pack or choosing per-call payment requires a wallet capable of signing x402 payments on Base or b402 payments on BNB Chain. Using an existing key does not require a wallet.
 
 If the agent does not have a compatible wallet, you can install one without leaving the conversation. For example, Binance Agentic Wallet supports x402 payment signing:
 
@@ -88,14 +106,15 @@ The npm wrapper invokes the pinned `skills` CLI with copy mode.
 │       ├── SKILL.md
 │       ├── scripts/
 │       │   ├── cournot-client.mjs
-│       │   └── payment-flow.mjs
+│       │   ├── payment-flow.mjs
+│       │   └── account-flow.mjs
 │       └── references/
+│           ├── account.md
 │           ├── payment.md
 │           ├── query-flow.md
 │           └── response-format.md
-└── test/
-    ├── cournot-client.test.mjs
-    └── payment-flow.test.mjs
+└── tests/
+    └── account-flow.test.mjs
 ```
 
 ## Disclaimer
