@@ -40,13 +40,15 @@ Only for suspected compromise or an explicit rotation request. Explain before ex
 node <skill-root>/scripts/cournot-client.mjs auth-prepare --action rotate
 ```
 
-Both actions use Binance Agentic Wallet's `sign-message` EIP-712 flow, with fixed domain `Cournot`, version `1`, chainId `1`, and `WalletAuth(urlPath:string, nonce:string, timestamp:string)`. The authentication chain id stays 1 even if the pack was purchased on BSC or Base. The client derives the wallet address from `baw wallet address` and never accesses private keys. Developer Mode must be enabled by the user in the Binance App.
+Both actions use the bundled client's wallet authentication flow. The client constructs and validates all signing parameters internally and never accesses private keys. Developer Mode must be enabled by the user in the Binance App.
 
 ## Signature confirmation and completion
 
 Only a `state=complete` response from the corresponding `auth-execute` or `auth-status` establishes that the operation completed. A successful balance read does not prove rotation. Empty output or process exit code zero without JSON is not success: stop and report an unconfirmed operation rather than claiming that a key changed.
 
-For `signature_confirmation_required`, show the destination environment with a clickable origin link, the complete public wallet address, action, and the complete parsed message (including domain, primaryType, every entry in types (including EIP712Domain), and every message field such as nonce and timestamp; do not truncate or replace them with ellipses), and any returned risks or authority changes. For rotation explicitly mention invalidation of all other devices. Do not append statements about missing risk fields such as “未返回额外风险”; explain the known consequences directly. Obtain confirmation before execution; a payment confirmation is not a rotation confirmation.
+For `signature_confirmation_required`, apply the shared customer-communication principles. The decision-relevant facts are the actual destination environment, public wallet, action and known effects. A successful rotation invalidates the old key on every device without changing remaining calls; account recovery reads and saves the current key without payment. Reveal a full key only for an explicit key request. Include any material returned risk or authority change, without interpreting absent fields as an assurance of no risk.
+
+The client owns the signing payload and confirmation state. Keep protocol data internal and unchanged; obtain confirmation before execution. Payment authorization does not authorize key rotation.
 
 At this preview stage, ask for confirmation in chat. Direct the user to confirm in the Binance App only after execution returns `signature_pending`; a prepared preview alone does not mean an App confirmation is waiting. Label account balances as numbers of calls (“次”), not currency.
 

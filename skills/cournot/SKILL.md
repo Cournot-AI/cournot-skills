@@ -35,19 +35,24 @@ metadata:
 
 Use only for `/cournot` or an explicit request to use Cournot. Reply in the user's language. The API supplies the assessment and evidence; never invent a second estimate.
 
-## Customer replies
+## Customer communication
 
-Start routine requests with one short task-focused update in the user's language. For English use “Checking Cournot.” / “Checking Cournot packs.” / “Checking your account.” For Chinese use “正在查询 Cournot。” / “正在查看充值套餐。” / “正在查看账户。” Never use the Chinese examples for an English request. Use a neutral “Checking your Cournot request.” / “正在处理 Cournot 请求。” if input still needs validation. For `import`, use “Importing your Cournot key.” / “正在导入 Cournot 密钥。”; for `rotate`, use “Preparing key rotation.” / “正在准备密钥轮换。” Do not call an import or rotation a probability query. Once a result or next choice is available, present it immediately; do not add an update saying you will display the packs, organize the result, or prepare the final wording. After a command succeeds, render its result directly; do not repeat an account read, import or other completed operation just to verify the same result again. Then show the result, actual blocker or next choice. Do not promise a purchase or a result before it succeeds. Do not repeat a second setup update just because another reference or command is needed.
+Apply these principles silently to every customer-facing message, across queries, account operations, payments, recovery and troubleshooting. They govern how to write; they are not content to announce or explain to the customer:
 
-Keep internal work out of every customer message: no narration of reading skills/references, checking billing/validation rules, routing, encoding, command repair, confidence cutoffs, test fixtures or simulated input. Reference lookups and routine mechanical corrections do not need announcements. When an operation takes long enough to need an update, say only what is still pending for the user. Never speak as the user or invent their choice or confirmation. In Chinese use “最新付款预览”, not “新鲜支付预览”; use “密钥” and “次” for keys and call balances. Translate key rotation as “轮换密钥”, never “旋转密钥”.
+- Ground the reply in the actual request and client result. Explain the current status, consequences for the user, and the next useful action. Distinguish a planned operation from a completed one; retain uncertainty when completion, payment or remaining calls is unconfirmed.
+- Use the language of the user's actual request consistently in all replies, with ordinary product terms and clear units. Do not infer the customer's language from documentation, examples or tool-output language. In Chinese, use 密钥, 轮换, 次 and 最新付款预览 for their respective concepts. Preserve API evidence and market-title wording according to the query and response references. Brevity applies to explanatory prose, not to required result fields: do not omit data required by a response contract.
+- Keep communication proportional to the decision. Acknowledge the current task briefly without narrating a plan or requesting authorization. Give further progress only when there is a meaningful update or delay. Present an available result or choice directly. Do not narrate internal reading, routing, validation, debugging, formatting or test activity, or repeat information without a user need. Keep the focus on the operation. Do not announce that you are following instructions, using a particular reply language, filtering information or withholding internal details; these are writing decisions, not task progress. Omit unrelated warnings.
+- In confirmation requests, show information needed to understand or authorize the operation, such as its environment, wallet, payment terms and effects.
+- Identify the active API environment with a clickable origin in account results and confirmation previews. Use the client's `base`, or configured API base when absent: `https://dev-interface.cournot.ai` is development, `https://pro.cournot.ai` is production, and other origins are local/custom. Keep this separate from the payment network; mainnet does not imply the production API.
+- Collect only the input needed for the next step. A routine choice is distinct from payment or credential authorization; never invent or speak for the user's consent. Request authorization only after the client provides a concrete operation preview with the information needed to decide. A request to perform an operation already permits preparing its preview; do not insert preliminary authorization questions. When awaiting input, end the final reply with a direct question about the next decision, rather than telling the user what confirmation phrase to type. Keep explanations about the operation, quoting internal rules or paths only when the host requires it or the user explicitly asks; signing parameters remain excluded.
 
-Keep API market titles out of progress messages. In candidate tables and result headlines, apply only the title substitutions in query-flow.md; do not translate or paraphrase the remaining wording. This preserves conditions such as “above” and “before”.
+Before sending any customer-facing message, check it against these principles: every sentence must help the user understand the result, its consequences or the next decision; every status and authorization claim must have evidence from the client or the user. Remove process narration and statements made on the user's behalf. Apply this check to progress messages as well as the final reply.
 
-In every payment preview and account result, include the active API environment and a clickable origin link, even if it appeared earlier. Determine it from the client's `base` (or the configured API base when absent): `https://dev-interface.cournot.ai` is development, `https://pro.cournot.ai` is production, and other origins are local/custom. The API environment and payment network are separate facts; a mainnet route does not imply the production API.
-
-Treat routine choices as input collection, separate from payment or credential authorization. Put the next question in the final response when awaiting input. Quote internal rules or paths only if the user asks or the host requires it. For errors or uncertain outcomes, read [errors.md](references/errors.md) without announcing the lookup; apply it to progress updates and final replies.
+Use [errors.md](references/errors.md) to interpret failures and uncertain outcomes under these same principles. Flow references define business facts and permitted actions, not fixed customer scripts.
 
 ## Route the request first
+
+Read the applicable flow reference before acting on or explaining a client result. For follow-up questions, status explanations and troubleshooting, select the reference from the pending operation or returned action; do not treat them as new event queries or infer a workflow from a state name alone.
 
 After removing `/cournot` and outer whitespace, match these complete commands. Do not interpret an event containing a reserved word as a management command.
 
@@ -56,7 +61,7 @@ After removing `/cournot` and outer whitespace, match these complete commands. D
 | `balance` | Read balance and masked key — [account.md](references/account.md) |
 | `key` | Show the full key, or recover it using the wallet — [account.md](references/account.md) |
 | `import <key>` | Validate and save an existing key — [account.md](references/account.md) |
-| `rotate` | Confirm invalidation of all old-key devices, then rotate — [account.md](references/account.md) |
+| `rotate` | Preview rotation and its effect on the old key; execute only after confirmation — [account.md](references/account.md) |
 | `topup` | Let the user select a pack, preview and confirm payment — [payment.md](references/payment.md) |
 | Anything else | Event query — [query-flow.md](references/query-flow.md) |
 
@@ -64,11 +69,13 @@ For event queries only, also strip the optional `probability` prefix. The messag
 
 ## Runtime and billing
 
+Never expose signing payloads or protocol parameters in any reply, including troubleshooting: domain/types/primaryType, signing chainId, urlPath, nonce, signing timestamp, parsed signing messages and internal request/intent IDs remain inside the client. Do not reconstruct them for display. This boundary has no technical-details exception; it does not remove the public payment terms needed for informed confirmation.
+
 Node.js 22.20 or newer is required. All API operations use `scripts/cournot-client.mjs`; credentials and wallet signatures stay inside the client. The current default is **development**, `https://dev-interface.cournot.ai`. `COURNOT_API_BASE=https://pro.cournot.ai` selects production. Never silently change environments to work around a failure. Display the active environment for management and payment operations; dev payments can still transfer real mainnet assets.
 
 Each IP has **three free probability calls in total, with no reset**. Free allowance is used before prepaid calls. No key or wallet is required to start. After free calls, a configured key spends prepaid balance; otherwise the user chooses topup, import, or $0.01 per-call payment. Packs do not expire, stack, and are non-refundable. Prices and call counts come from the client's pack catalog; actual payment terms come from the server's 402 response.
 
-One user query permits one probability assessment, including free and prepaid calls. A confirmed 402 replay is part of that same assessment. No automatic retries, background queries, automatic topup, or silent fallback from prepaid balance to per-call payment. Keep pending event text and selected market ids through disambiguation, credential setup, and payment confirmation. A completed topup does not automatically rerun the pending query.
+One user query permits one probability assessment, including free and prepaid calls. A confirmed 402 replay is part of that same assessment. Do not repeat completed account operations merely to verify the same result. No automatic retries, background queries, automatic topup, or silent fallback from prepaid balance to per-call payment. Keep pending event text and selected market ids through disambiguation, credential setup, and payment confirmation. A completed topup does not automatically rerun the pending query.
 
 `COURNOT_API_KEY` overrides the file only for `COURNOT_API_KEY_BASE` (dev by default). Otherwise the client reads a per-origin file beneath `~/.cournot/credentials/`. Files are plaintext protected by filesystem permissions, not an encrypted vault. Never read or edit them through the model. Use client commands for import, saving, recovery, and display. Only explicit `/cournot key` may reveal a complete key; all other output must remain masked. Never request wallet private keys or seed phrases.
 
