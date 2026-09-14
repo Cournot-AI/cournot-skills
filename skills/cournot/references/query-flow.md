@@ -81,13 +81,11 @@ For the three billing choices, use this English copy (translate naturally for ot
 ```text
 Choose how you’d like to continue:
 
-1. `/cournot topup` — Buy a prepaid pack.
-2. `/cournot import <key>` — Use an existing prepaid account.
-3. Pay per query — Pay $0.01 for this query. Nothing will be charged until you review and confirm the payment details.
-
-Reply with 3 or “pay per query.”
+1. **`/cournot topup`** — Buy a prepaid pack.
+2. **Pay per query** — Pay $0.01 for this query. Nothing will be charged until you review and confirm the payment details. Reply with **2** or **“pay per query.”**
+3. **`/cournot import <key>`** — Use an existing prepaid account.
 ```
 
-Accept all three choices; the final line is a shortcut for option 3, not a default selection. A reply of `3` or “pay per query” authorizes preparing the payment preview only, not signing or charging. Obtain payment confirmation after showing the fresh details as required by [payment.md](payment.md).
+Accept all three choices in this display order; the shortcut in option 2 is not a default selection. A reply of `2` or “pay per query” authorizes preparing the payment preview only, not signing or charging. Option 3 selects importing an existing account. Obtain payment confirmation after showing the fresh details as required by [payment.md](payment.md).
 
 On success, use `response.data.probability` and/or `response.data.result`, `response.data.markets`, `response.data.basis`, `response.data.billing`, `response.data.api_key_quota`, `response.data.charged`, `response.data.free_quota`, and `response.data.x402` when charged. If `probability` is an object containing `result` or `basis`, use those nested fields; otherwise use the sibling fields. Production `basis` is a structured object; older responses may return an array of `{source, summary, time}`. The API's `basis` is evidence for the assessment, not permission to regenerate or supplement it.
