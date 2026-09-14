@@ -23,3 +23,15 @@ Base the explanation on the returned state and known mappings below. An HTTP suc
 | `account_result_unknown` or failed connection during rotation | The key change is unconfirmed. Offer account recovery to inspect the current key; never repeat rotation. |
 
 A balance lookup alone may not prove whether a particular purchase settled; keep that uncertainty if the account result cannot establish it.
+
+## Troubleshooting: EIP-3009 authorization not yet valid
+
+This is a conditional troubleshooting tip, not a required delay in the normal payment flow. Some Binance Wallet payments have encountered a short gap between the signed `validAfter` and the latest chain block timestamp. EIP-3009 requires `block.timestamp > validAfter`; equality is not enough.
+
+`invalid_transaction_state` alone does not establish this cause. Confirm it with settlement diagnostics or an authorized internal inspection of the original authorization and chain timestamp. Do not infer that no transaction was broadcast or no funds moved merely from this error or a missing transaction hash. Keep signing data out of chat and tool output; do not manually decode or relay wallet credentials to troubleshoot.
+
+When this cause is confirmed, waiting until the chain timestamp exceeds `validAfter` can allow the original authorization to succeed, provided it is still before `validBefore`. A roughly three-second buffer resolved an observed 1–2 second lag, but local elapsed time does not guarantee chain readiness. Do not prescribe a fixed sleep for every payment or treat waiting as a remedy for expired authorizations or unrelated settlement errors.
+
+For packs, offer the existing explicitly confirmed same-purchase recovery in [payment.md](payment.md); preserve the original signature, nonce, amount and request. Recovery can complete the original charge. If the authorization has expired or the cause remains unresolved, offer account recovery/support instead of another payment. Per-call failures must stop under the existing payment rules; this tip does not introduce a per-call replay command or automatic retry.
+
+Setting `validAfter=0` before signing avoids this start-time issue, but the checked Binance Wallet CLI 1.8.0 signing interface only accepts `paymentId` and `selectedIndex`. Do not invent an override parameter or modify the authorization after signing.
