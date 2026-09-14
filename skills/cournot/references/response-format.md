@@ -40,7 +40,18 @@ External data basis:
 
 {tables for every returned basis section and field}
 
-This query was {not charged / charged on-chain txn_hash} (account free allowance remaining/total). This is an assessment of pricing, not investment advice.
+{Billing route and remaining calls from the returned fields.} This is an assessment of pricing, not investment advice.
 ```
 
-Describe the free quota as a one-time account allowance. Never call it a daily allowance, say “today remaining,” mention an internal quota identifier, or imply that it resets. If charged, mention returned `x402.txn_hash` and `network_id`. If not, say it was not charged.
+Use `data.billing` for the footer. Its field names and the `charged` flag are internal interpretation rules, not text to print or explain to the customer. Use a short natural sentence such as “本次使用预付次数，剩余 586 次。” or “This used a free call; 2 remain.” Do not print `free_quota`, `api_key` or `charged=false` as billing labels.
+
+Interpret billing as follows:
+
+- `free_quota`: this query used the lifetime IP free allowance; show `free_quota.remaining` when present. No daily reset. If no prepaid balance was returned, omit it; do not call account solely to fill the footer.
+- `api_key`: this query used prepaid calls; show `api_key_quota.remaining` when present. `charged=false` means no on-chain payment, **not** no quota deduction.
+- `x402`: this query was paid on-chain; include returned transaction hash and network. Show only quotas that were actually returned.
+- Missing billing or quota: say that the billing route or remaining balance was not returned. Never treat missing/null as zero or calculate current balance from an earlier response.
+
+If a future response explicitly supplies `answered=false`, explain the returned reason. Only assert that no calls were deducted when the response explicitly confirms that fact; the current contract does not define an `answered` guarantee. On server/network errors the outcome may be unknown: stop and offer `balance`, never retry automatically.
+
+Keep the pricing-assessment disclaimer. Do not invent a rule-version identifier absent from the response.
