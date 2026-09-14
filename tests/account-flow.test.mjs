@@ -33,7 +33,7 @@ function fixture(t, env = {}) {
     intents: createFileIntentStore({ directory: join(directory, "intents") }) };
 }
 
-function paymentWallet(counter = {}) {
+function paymentWallet(counter = {}, authorizationOverrides = {}) {
   return {
     preview() { return { success: true, data: { paymentId: "payment", options: [{
       index: 7, status: "READY_TO_SIGN", originalAccept: route, amount: "0.01", tokenSymbol: "USD1",
@@ -42,7 +42,7 @@ function paymentWallet(counter = {}) {
       assert.equal(index, 7); counter.signs = (counter.signs || 0) + 1;
       return { success: true, data: { paymentHeaderName: "PAYMENT-SIGNATURE", paymentHeaderValue:
         Buffer.from(JSON.stringify({ x402Version: 2, accepted: route, payload: { signature: "secret-signature",
-          authorization: { from: address, to: address, value: route.amount, validAfter: "0", validBefore: "9999999999", nonce: "secret-nonce" },
+          authorization: { from: address, to: address, value: route.amount, validAfter: "0", validBefore: "9999999999", nonce: "secret-nonce", ...authorizationOverrides },
         } })).toString("base64"),
       } };
     },
@@ -208,6 +208,61 @@ test("uncertain purchase preserves exact payment for explicit recovery without a
   const result = await recoverPack({ intentId: unknown.recoveryId, confirmed: true, intents, credentials,
     fetchImpl: async (url, init) => { assert.deepEqual({ url, body: init.body, headers: init.headers }, original); return account(); } });
   assert.equal(result.saved, true); assert.equal(count.signs, 1);
+});
+
+test("EIP-3009 chain timing: immediate success, not-yet-valid recovery, and expiry", async (t) => {
+  for (const [label, offset] of [["already valid", 1], ["chain behind", -2], ["equal timestamp", 0], ["expired", 60]]) {
+    await t.test(label, async (t) => {
+      const { credentials, intents } = fixture(t);
+      const count = {};
+      const validAfter = Math.floor(Date.now() / 1000);
+      const wallet = paymentWallet(count, { validAfter: String(validAfter), validBefore: String(validAfter + 60) });
+      const prepared = await preparePack({ packId: "p5", intents, wallet, fetchImpl: async () => challenge() });
+      let chainTimestamp = validAfter + offset;
+      let submissions = 0;
+      let original;
+      // Simulate the settlement precheck against chain time, without sleeping or paying.
+      const fetchImpl = async (url, init) => {
+        submissions++;
+        const submitted = { url, body: init.body, headers: init.headers };
+        if (original) assert.deepEqual(submitted, original);
+        else original = structuredClone(submitted);
+        const { authorization, signature } = JSON.parse(Buffer.from(init.headers["PAYMENT-SIGNATURE"], "base64").toString()).payload;
+        assert.equal(signature, "secret-signature");
+        assert.equal(authorization.validAfter, String(validAfter));
+        assert.equal(authorization.validBefore, String(validAfter + 60));
+        assert.equal(authorization.nonce, "secret-nonce");
+        assert.equal(authorization.value, route.amount);
+        return chainTimestamp > Number(authorization.validAfter) && chainTimestamp < Number(authorization.validBefore)
+          ? account()
+          : json({ code: 22000, msg: "invalid_transaction_state" });
+      };
+      const result = await executePayment({ intentId: prepared.intentId, selectedOption: 1, confirmed: true,
+        intents, credentials, wallet, fetchImpl });
+      assert.equal(submissions, 1); // No automatic retries on the generic settlement error.
+      assert.equal(count.signs, 1);
+      if (offset === 1) {
+        assert.equal(result.saved, true);
+        return;
+      }
+      assert.equal(result.state, "purchase_unknown");
+      assert.equal(credentials.read(DEV_BASE).key, null);
+      await assert.rejects(recoverPack({ intentId: result.recoveryId, intents, credentials, fetchImpl }), /confirmation/);
+      assert.equal(submissions, 1);
+      chainTimestamp += 3;
+      const recovered = await recoverPack({ intentId: result.recoveryId, confirmed: true, intents, credentials, fetchImpl });
+      assert.equal(submissions, 2);
+      assert.equal(count.signs, 1);
+      if (offset === 60) {
+        // Waiting cannot fix expiry; a server rejection must remain unconfirmed.
+        assert.equal(recovered.state, "purchase_unknown");
+        assert.equal(credentials.read(DEV_BASE).key, null);
+      } else {
+        assert.equal(recovered.saved, true);
+        assert.equal(credentials.read(DEV_BASE).key, key);
+      }
+    });
+  }
 });
 
 test("purchase success with local save failure reports recovery instead of another payment", async (t) => {
