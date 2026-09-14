@@ -265,6 +265,64 @@ test("EIP-3009 chain timing: immediate success, not-yet-valid recovery, and expi
   }
 });
 
+test("only explicit not-yet-valid failures retry once within the confirmed payment", async (t) => {
+  const cases = [
+    { name: "success", first: "success", calls: 1 },
+    { name: "explicit reason", calls: 2, saved: true },
+    { name: "contract revert reason", msg: "EIP3009: authorization is not yet valid", calls: 2, saved: true },
+    { name: "generic error", msg: "invalid_transaction_state", calls: 1 },
+    { name: "still invalid after retry", repeat: true, calls: 2 },
+    { name: "network failure", first: "network", calls: 1 },
+    { name: "expired", before: "1000", calls: 1 },
+    { name: "expires during wait", before: "1003", calls: 1 },
+    { name: "future authorization", after: "1008", calls: 1 },
+    { name: "malformed timestamp", after: "NaN", calls: 1 },
+    { name: "wait overshoots expiry", overshoot: true, calls: 1, waits: 1 },
+    { name: "service unavailable", status: 503, calls: 1 },
+    { name: "contradictory charge evidence", data: { charged: true }, calls: 1 },
+  ];
+  for (const path of ["packs", "probability"]) for (const scenario of cases) {
+    await t.test(`${path}: ${scenario.name}`, async (t) => {
+      const { credentials, intents } = fixture(t);
+      const count = {};
+      const wallet = paymentWallet(count, { validAfter: scenario.after ?? "1000", validBefore: scenario.before ?? "1060" });
+      const prepared = path === "packs"
+        ? await preparePack({ packId: "p5", intents, wallet, fetchImpl: async () => challenge() })
+        : await prepareProbability({ request, perCall: true, intents, credentials, wallet, fetchImpl: async () => challenge() });
+      let clock = 1000000;
+      let calls = 0;
+      let waits = 0;
+      let original;
+      const options = { intentId: prepared.intentId, selectedOption: 1, confirmed: true, intents, credentials, wallet,
+        now: () => clock, wait: async (ms) => {
+          waits++;
+          assert.equal(ms, 3000);
+          clock += scenario.overshoot ? 60000 : ms;
+        },
+        fetchImpl: async (url, init) => {
+          calls++;
+          const submitted = { url, body: init.body, headers: init.headers };
+          if (original) assert.deepEqual(submitted, original);
+          else original = structuredClone(submitted);
+          if (scenario.first === "network") throw new Error("network failure");
+          if (scenario.first === "success" || (calls === 2 && !scenario.repeat)) return account();
+          return json({ code: 22000, msg: scenario.msg ?? "authorization_not_yet_valid", data: scenario.data }, scenario.status ?? 200);
+        } };
+      if (path === "probability" && scenario.first === "network") {
+        await assert.rejects(executePayment(options), /network failure/);
+      } else {
+        const result = await executePayment(options);
+        const success = scenario.first === "success" || scenario.saved;
+        if (path === "packs" && success) assert.equal(result.saved, true);
+        else assert.equal(result.state, success ? "complete" : path === "packs" ? "purchase_unknown" : "payment_failed");
+      }
+      assert.equal(calls, scenario.calls);
+      assert.equal(waits, scenario.waits ?? (scenario.calls === 2 ? 1 : 0));
+      assert.equal(count.signs, 1);
+    });
+  }
+});
+
 test("purchase success with local save failure reports recovery instead of another payment", async (t) => {
   const { intents } = fixture(t); const wallet = paymentWallet();
   const prepared = await preparePack({ packId: "p5", intents, wallet, fetchImpl: async () => challenge() });

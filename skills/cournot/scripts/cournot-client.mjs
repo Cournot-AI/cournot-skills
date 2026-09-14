@@ -860,6 +860,30 @@ function parseSignedPayment(result) {
   return result.data;
 }
 
+// Retry only a specific authorization precheck rejection, never an ambiguous
+// settlement/network failure. The original signed header and request are reused.
+async function submitSignedPayment({ paymentHeader, now, wait, ...request }) {
+  const send = () => apiRequest({ ...request, method: "POST", headers: { "PAYMENT-SIGNATURE": paymentHeader } });
+  const response = await send();
+  if (response.body?.code !== 22000 || ![
+    "authorization_not_yet_valid", "EIP3009: authorization is not yet valid",
+  ].includes(response.body?.msg) || response.status >= 500 || response.status === 429
+    || response.body?.data?.charged || response.body?.data?.x402?.txn_hash) return response;
+  let authorization;
+  try { authorization = JSON.parse(Buffer.from(paymentHeader, "base64").toString("utf8")).payload.authorization; }
+  catch { return response; }
+  const timestamps = [authorization?.validAfter, authorization?.validBefore];
+  if (!timestamps.every((value) => /^\d+$/.test(String(value)))) return response;
+  const [after, before] = timestamps.map((value) => Number(value) * 1000);
+  if (![after, before].every(Number.isSafeInteger) || after >= before) return response;
+  const current = now();
+  const delay = Math.max(3000, after + 3000 - current);
+  if (delay > 10000 || current + delay >= before) return response;
+  await wait(delay);
+  if (now() >= before || now() < after + 3000) return response;
+  return send();
+}
+
 export async function executePayment({
   intentId,
   selectedOption,
@@ -868,6 +892,7 @@ export async function executePayment({
   wallet = createBinanceWalletRunner(),
   intents = createFileIntentStore(),
   base = apiBase(), credentials = createCredentials(),
+  now = () => Date.now(), wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
   if (confirmed !== true) {
     fail("Explicit user confirmation is required", "CONFIRMATION_REQUIRED");
@@ -928,9 +953,10 @@ export async function executePayment({
     if (intent.path === "packs") {
       // Store the exact signed request before sending: recovery never signs or charges a new payment.
       const recoveryId = intents.save({ kind: "pack_recovery", base: intent.base, request: intent.request, paymentHeader });
-      return recoverPack({ intentId: recoveryId, confirmed: true, base, credentials, intents, fetchImpl });
+      return recoverPack({ intentId: recoveryId, confirmed: true, base, credentials, intents, fetchImpl, now, wait });
     }
-    const paid = await postProbability(fetchImpl, intent.request, paymentHeader, { base: intent.base });
+    const paid = await submitSignedPayment({ base: intent.base, path: "probability", body: intent.request,
+      paymentHeader, fetchImpl, now, wait });
     const settled = paid.status >= 200 && paid.status < 300 && paid.body?.code === 0;
     return redactSensitive({
       state: settled ? "complete" : "payment_failed", httpStatus: paid.status,
@@ -942,7 +968,8 @@ export async function executePayment({
 }
 
 export async function recoverPack({ intentId, confirmed, base = apiBase(), credentials = createCredentials(),
-  intents = createFileIntentStore(), fetchImpl = fetch } = {}) {
+  intents = createFileIntentStore(), fetchImpl = fetch,
+  now = () => Date.now(), wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
   if (confirmed !== true) fail("Explicit purchase recovery confirmation is required", "CONFIRMATION_REQUIRED");
   const lease = intents.take(intentId);
   const intent = lease.value;
@@ -951,8 +978,8 @@ export async function recoverPack({ intentId, confirmed, base = apiBase(), crede
   }
   let response;
   try {
-    response = await apiRequest({ base: intent.base, path: "packs", method: "POST", body: intent.request,
-      headers: { "PAYMENT-SIGNATURE": intent.paymentHeader }, fetchImpl });
+    response = await submitSignedPayment({ base: intent.base, path: "packs", body: intent.request,
+      paymentHeader: intent.paymentHeader, fetchImpl, now, wait });
   } catch {
     lease.restore();
     return { state: "purchase_unknown", recoveryId: intentId, next: "Do not purchase again. Explicitly recover this same payment or check the paying wallet's account." };
