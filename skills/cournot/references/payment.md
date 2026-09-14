@@ -36,7 +36,7 @@ For `purchase_unknown`, do not claim success or failure and do not create a new 
 node <skill-root>/scripts/cournot-client.mjs recover-purchase --intent '<recoveryId>' --confirmed true
 ```
 
-Recovery reuses the original environment, SKU and payment authorization; no new wallet signature is created. The backend documents idempotence for the same payment. Recovery intents expire after 30 minutes; payment authorizations may expire earlier. If expired or still unresolved, report uncertainty and use account recovery/support rather than paying again. Never retry a recovery automatically.
+Recovery reuses the original environment, SKU and payment authorization; no new wallet signature is created. The backend documents idempotence for the same payment. Recovery intents expire after 30 minutes; payment authorizations may expire earlier. If expired or still unresolved, report uncertainty and use account recovery/support rather than paying again. Do not invoke recovery automatically after a returned failure. The bounded internal authorization-timing retry below is part of the already confirmed operation.
 
 ## Choose per-call payment
 
@@ -81,7 +81,9 @@ Only after a clear affirmative reply, run:
 node <skill-root>/scripts/cournot-client.mjs execute --intent '<intentId>' --selected-option '<displayIndex>' --confirmed true
 ```
 
-The command completes all mechanical steps internally and returns sanitized JSON:
+The command completes all mechanical steps internally and returns sanitized JSON. For both packs and per-call payments, the client can retry the exact original signed payment once when the server returns business code `22000` with `msg` exactly `authorization_not_yet_valid` or `EIP3009: authorization is not yet valid`. These are recognized explicit reasons, not an assumption that the current backend emits them. Generic `invalid_transaction_state`, network failures and unrelated errors never trigger this retry.
+
+This internal retry is covered by the original payment confirmation; do not ask for another confirmation or announce a failure before the command finishes. The client waits at least three seconds and until local `validAfter + 3 seconds`, with a maximum ten-second wait, and checks expiry before and after waiting. This buffer does not guarantee chain readiness; a second failure stops. It never changes the signature, nonce, amount, selected route or request, and never signs again. If the command returns failure/uncertainty, the automatic attempt is over: follow the existing stop/recovery rules, without starting another loop.
 
 - `state=complete`: for a probability intent, render `response` using `references/response-format.md`; for a pack intent, report returned pack, balance, masked key and save result.
 - `state=payment_failed`: explain the returned failure using [errors.md](errors.md) and stop. Do not reuse the intent or retry automatically.
