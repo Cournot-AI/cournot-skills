@@ -76,4 +76,18 @@ The client owns the probability HTTP request and any 402 response. Treat its JSO
 - `state=payment_confirmation_required`, `wallet_required`, or `wallet_blocked`: read `references/payment.md`.
 - Other errors: use [errors.md](errors.md) and stop. Never reconstruct the HTTP exchange outside the client.
 
+For the three billing choices, use this English copy (translate naturally for other user languages). Precede it with one short sentence about the exhausted allowance and the pending assessment; do not repeat the matched market title.
+
+```text
+Choose how you’d like to continue:
+
+1. `/cournot topup` — Buy a prepaid pack.
+2. `/cournot import <key>` — Use an existing prepaid account.
+3. Pay per query — Pay $0.01 for this query. Nothing will be charged until you review and confirm the payment details.
+
+Reply with 3 or “pay per query.”
+```
+
+Accept all three choices; the final line is a shortcut for option 3, not a default selection. A reply of `3` or “pay per query” authorizes preparing the payment preview only, not signing or charging. Obtain payment confirmation after showing the fresh details as required by [payment.md](payment.md).
+
 On success, use `response.data.probability` and/or `response.data.result`, `response.data.markets`, `response.data.basis`, `response.data.billing`, `response.data.api_key_quota`, `response.data.charged`, `response.data.free_quota`, and `response.data.x402` when charged. If `probability` is an object containing `result` or `basis`, use those nested fields; otherwise use the sibling fields. Production `basis` is a structured object; older responses may return an array of `{source, summary, time}`. The API's `basis` is evidence for the assessment, not permission to regenerate or supplement it.
