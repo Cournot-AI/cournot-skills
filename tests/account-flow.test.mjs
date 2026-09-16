@@ -10,8 +10,15 @@ import {
   prepareAccountAuth, executeAccountAuth, sanitize,
 } from "../skills/cournot/scripts/account-flow.mjs";
 import {
-  createFileIntentStore, prepareProbability, preparePack, executePayment, recoverPack,
+  createFileIntentStore, prepareProbability, preparePack, executePayment as executePaymentReal, recoverPack as recoverPackReal,
 } from "../skills/cournot/scripts/cournot-client.mjs";
+
+function withClock(operation, options) {
+  let clock = Date.now();
+  return operation({ now: () => clock, wait: async (ms) => { clock += ms; }, ...options });
+}
+const executePayment = (options) => withClock(executePaymentReal, options);
+const recoverPack = (options) => withClock(recoverPackReal, options);
 
 const key = "ck_live_test_key_1234";
 const otherKey = "ck_live_test_key_5678";
@@ -273,11 +280,10 @@ test("only explicit not-yet-valid failures retry once within the confirmed payme
     { name: "generic error", msg: "invalid_transaction_state", calls: 1 },
     { name: "still invalid after retry", repeat: true, calls: 2 },
     { name: "network failure", first: "network", calls: 1 },
-    { name: "expired", before: "1000", calls: 1 },
     { name: "expires during wait", before: "1003", calls: 1 },
     { name: "future authorization", after: "1008", calls: 1 },
     { name: "malformed timestamp", after: "NaN", calls: 1 },
-    { name: "wait overshoots expiry", overshoot: true, calls: 1, waits: 1 },
+    { name: "retry wait overshoots expiry", overshoot: true, calls: 1, waits: 2 },
     { name: "service unavailable", status: 503, calls: 1 },
     { name: "contradictory charge evidence", data: { charged: true }, calls: 1 },
   ];
@@ -289,7 +295,7 @@ test("only explicit not-yet-valid failures retry once within the confirmed payme
       const prepared = path === "packs"
         ? await preparePack({ packId: "p5", intents, wallet, fetchImpl: async () => challenge() })
         : await prepareProbability({ request, perCall: true, intents, credentials, wallet, fetchImpl: async () => challenge() });
-      let clock = 1000000;
+      let clock = 997000;
       let calls = 0;
       let waits = 0;
       let original;
@@ -297,7 +303,7 @@ test("only explicit not-yet-valid failures retry once within the confirmed payme
         now: () => clock, wait: async (ms) => {
           waits++;
           assert.equal(ms, 3000);
-          clock += scenario.overshoot ? 60000 : ms;
+          clock += scenario.overshoot && waits > 1 ? 60000 : ms;
         },
         fetchImpl: async (url, init) => {
           calls++;
@@ -317,7 +323,7 @@ test("only explicit not-yet-valid failures retry once within the confirmed payme
         else assert.equal(result.state, success ? "complete" : path === "packs" ? "purchase_unknown" : "payment_failed");
       }
       assert.equal(calls, scenario.calls);
-      assert.equal(waits, scenario.waits ?? (scenario.calls === 2 ? 1 : 0));
+      assert.equal(waits, scenario.waits ?? (scenario.calls === 2 ? 2 : 1));
       assert.equal(count.signs, 1);
     });
   }
@@ -473,4 +479,137 @@ test("production is the default and explicit development requests stay on develo
       },
     });
   }
+});
+test("paid submissions wait after signing, preserve errors, and never send expired authorizations", async (t) => {
+  const cases = [
+    { name: "success", before: "1060", calls: 1, waits: 1 },
+    { name: "already expired", before: "1000", calls: 0, waits: 0, expired: true },
+    { name: "expiry equals end of delay", before: "1003", calls: 0, waits: 0, expired: true },
+    { name: "expiry just beyond delay", before: "1004", calls: 1, waits: 1 },
+    { name: "timer overshoots expiry", before: "1060", calls: 0, waits: 1, overshoot: true, expired: true },
+    { name: "business rejection", before: "1060", calls: 1, waits: 1, rejected: true },
+    { name: "transport failure", before: "1060", calls: 1, waits: 1, transport: true },
+    { name: "delay interrupted", before: "1060", calls: 0, waits: 1, interrupted: true },
+  ];
+  for (const path of ["probability", "packs"]) for (const c of cases) {
+    await t.test(`${path}: ${c.name}`, async (t) => {
+      const { credentials, intents } = fixture(t);
+      let clock = 1000000, waits = 0, submissions = 0;
+      const events = [], count = {};
+      const signingWallet = paymentWallet(count, { validAfter: "999", validBefore: c.before });
+      const wallet = { ...signingWallet, sign(...args) { events.push("sign"); return signingWallet.sign(...args); } };
+      const prepared = path === "packs"
+        ? await preparePack({ packId: "p5", intents, wallet, fetchImpl: async () => challenge() })
+        : await prepareProbability({ request, perCall: true, intents, credentials, wallet, fetchImpl: async () => challenge() });
+      const options = { intentId: prepared.intentId, selectedOption: 1, confirmed: true, intents, credentials, wallet,
+        now: () => clock,
+        wait: async (ms) => {
+          events.push("wait"); waits++; assert.equal(ms, 3000);
+          if (c.interrupted) throw Object.assign(new Error("test wait interrupted"), { code: "TEST_WAIT_INTERRUPTED" });
+          clock += c.overshoot ? 60000 : ms;
+        },
+        fetchImpl: async () => {
+          events.push("submit"); submissions++; assert.equal(clock, 1003000); clock += 25;
+          if (c.transport) throw Object.assign(new Error("test connection timeout"), { cause: { code: "ETIMEDOUT" } });
+          if (c.rejected) return json({ code: 22000, msg: "invalid_transaction_state" }, 400);
+          return account();
+        },
+      };
+      let result, failure;
+      try { result = await executePayment(options); } catch (error) { failure = error; }
+      assert.equal("diagnostics" in (result ?? failure), false);
+      assert.equal(count.signs, 1); assert.equal(waits, c.waits); assert.equal(submissions, c.calls);
+      assert.doesNotMatch(JSON.stringify(result ?? failure), /secret-signature|secret-nonce|paymentHeader/);
+      if (c.calls) {
+        assert.deepEqual(events, ["sign", "wait", "submit"]);
+      }
+      if (c.expired) assert.equal(failure?.code ?? result.error.code, "PAYMENT_AUTHORIZATION_EXPIRED");
+      else if (c.transport) {
+        assert.equal(failure?.cause?.code ?? result.error.code, "ETIMEDOUT");
+        assert.equal(failure?.message ?? result.error.message, "test connection timeout");
+      }
+      else if (c.interrupted) assert.equal(failure?.code ?? result.error.code, "TEST_WAIT_INTERRUPTED");
+      else if (c.rejected) {
+        assert.equal(result.httpStatus, 400); assert.equal(result.response.code, 22000);
+        assert.equal(result.response.msg, "invalid_transaction_state");
+      } else assert.equal(path === "packs" ? result.saved : result.state === "complete", true);
+      await assert.rejects(executePayment(options), /already used/);
+    });
+  }
+});
+
+test("pack recovery applies its own delay without signing again and keeps transport errors", async (t) => {
+  const { credentials, intents } = fixture(t); const count = {}, wallet = paymentWallet(count);
+  const prepared = await preparePack({ packId: "p5", intents, wallet, fetchImpl: async () => challenge() });
+  let clock = 1000000; const waits = [], requests = [];
+  const common = { intents, credentials, now: () => clock, wait: async ms => { waits.push(ms); clock += ms; } };
+  const first = await executePayment({ ...common, intentId: prepared.intentId, selectedOption: 1, confirmed: true, wallet,
+    fetchImpl: async (url, init) => { requests.push({ url, ...init }); throw Object.assign(new Error("test timeout"), { code: "ETIMEDOUT" }); } });
+  assert.equal(first.state, "purchase_unknown"); assert.equal(first.error.code, "ETIMEDOUT");
+  assert.equal(first.error.message, "test timeout");
+  const result = await recoverPack({ ...common, intentId: first.recoveryId, confirmed: true,
+    fetchImpl: async (url, init) => {
+      assert.equal(url, requests[0].url); assert.equal(init.body, requests[0].body);
+      assert.deepEqual(init.headers, requests[0].headers); return account();
+    } });
+  assert.deepEqual(waits, [3000, 3000]); assert.equal(count.signs, 1); assert.equal(result.saved, true);
+});
+
+test("signing and approval failures never wait or submit", async (t) => {
+  for (const stage of ["sign", "approval", "validate"]) await t.test(stage, async (t) => {
+    const { credentials, intents } = fixture(t); const baseWallet = paymentWallet();
+    const prepared = await prepareProbability({ request, perCall: true, intents, credentials, wallet: baseWallet, fetchImpl: async () => challenge() });
+    const wallet = { ...baseWallet, sign(...args) {
+      if (stage === "sign") throw Object.assign(new Error("wallet unavailable"), { code: "WALLET_UNAVAILABLE" });
+      const result = baseWallet.sign(...args);
+      if (stage === "approval") result.data.approveTxHash = "0xapproval";
+      if (stage === "validate") result.data.paymentHeaderValue = Buffer.from('{}').toString('base64');
+      return result;
+    }, waitForApproval: async () => false };
+    const options = { intentId: prepared.intentId, selectedOption: 1, confirmed: true, intents, credentials, wallet,
+      wait: async () => assert.fail("must not wait"), fetchImpl: async () => assert.fail("must not submit") };
+    if (stage === "approval") {
+      const result = await executePayment(options);
+      assert.equal(result.state, "approval_pending");
+    } else await assert.rejects(executePayment(options), error => {
+      assert.equal(error.code, stage === "sign" ? "WALLET_UNAVAILABLE" : "PAYMENT_MISMATCH"); return true;
+    });
+    await assert.rejects(executePayment(options), /already used/);
+  });
+});
+
+test("concurrent confirmed payments have independent waits", async (t) => {
+  const { credentials, intents } = fixture(t); const counter = {}, wallet = paymentWallet(counter);
+  const prepared = await Promise.all([1, 2].map(() => prepareProbability({ request, perCall: true, intents, credentials, wallet, fetchImpl: async () => challenge() })));
+  const releases = []; let calls = 0;
+  const pending = prepared.map((p) => {
+    let clock = 1000000;
+    return executePayment({ intentId: p.intentId, selectedOption: 1, confirmed: true, intents, credentials, wallet,
+      now: () => clock, wait: ms => new Promise(resolve => { assert.equal(ms, 3000); releases.push(() => { clock += ms; resolve(); }); }),
+      fetchImpl: async () => { calls++; return json({ code: 0, data: { charged: true } }); } });
+  });
+  assert.equal(releases.length, 2); assert.equal(calls, 0); assert.equal(counter.signs, 2);
+  releases.forEach(release => release());
+  const results = await Promise.all(pending);
+  assert.equal(calls, 2);
+  for (const r of results) {
+    assert.equal(r.state, "complete");
+  }
+});
+
+test("production payment keeps its origin, terms and body through the initial delay", async (t) => {
+  const { credentials, intents } = fixture(t); const wallet = paymentWallet();
+  const prepared = await prepareProbability({ base: PRODUCTION_BASE, request, perCall: true, intents, credentials, wallet,
+    fetchImpl: async url => { assert.equal(url, `${PRODUCTION_BASE}/intelligence/v1/probability`); return challenge(); } });
+  let clock = 1000000, waited = false;
+  const result = await executePayment({ base: PRODUCTION_BASE, intentId: prepared.intentId, selectedOption: 1, confirmed: true,
+    intents, credentials, wallet, now: () => clock, wait: async ms => { assert.equal(ms, 3000); waited = true; clock += ms; },
+    fetchImpl: async (url, init) => {
+      assert.equal(waited, true); assert.equal(url, `${PRODUCTION_BASE}/intelligence/v1/probability`);
+      assert.deepEqual(JSON.parse(init.body), request);
+      const payment = JSON.parse(Buffer.from(init.headers['PAYMENT-SIGNATURE'], 'base64').toString());
+      assert.equal(payment.payload.authorization.to, route.payTo); assert.equal(payment.payload.authorization.value, route.amount);
+      return json({ code: 0, data: { charged: true } });
+    } });
+  assert.equal(result.state, "complete");
 });
