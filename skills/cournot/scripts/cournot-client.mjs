@@ -28,6 +28,7 @@ import {
 const INTENT_TTL_MS = 30 * 60 * 1000;
 const APPROVAL_WAIT_MS = 45 * 1000;
 const APPROVAL_POLL_MS = 3 * 1000;
+const PAYMENT_SETTLE_DELAY_MS = 3 * 1000;
 
 const NETWORK_METADATA = {
   "eip155:8453": { name: "Base mainnet", environment: "mainnet" },
@@ -863,19 +864,30 @@ function parseSignedPayment(result) {
 // Retry only a specific authorization precheck rejection, never an ambiguous
 // settlement/network failure. The original signed header and request are reused.
 async function submitSignedPayment({ paymentHeader, now, wait, ...request }) {
+  let window;
+  try {
+    const authorization = JSON.parse(Buffer.from(paymentHeader, "base64").toString("utf8")).payload.authorization;
+    const timestamps = [authorization?.validAfter, authorization?.validBefore];
+    if (timestamps.every((value) => /^\d+$/.test(String(value)))) {
+      const [after, before] = timestamps.map((value) => Number(value) * 1000);
+      if ([after, before].every(Number.isSafeInteger) && after < before) window = { after, before };
+    }
+  } catch { /* Other supported payment schemes may not have an authorization window. */ }
   const send = () => apiRequest({ ...request, method: "POST", headers: { "PAYMENT-SIGNATURE": paymentHeader } });
+  if (window && now() + PAYMENT_SETTLE_DELAY_MS >= window.before) {
+    fail("Payment authorization expires before submission", "PAYMENT_AUTHORIZATION_EXPIRED");
+  }
+  await wait(PAYMENT_SETTLE_DELAY_MS);
+  if (window && now() >= window.before) {
+    fail("Payment authorization expired before submission", "PAYMENT_AUTHORIZATION_EXPIRED");
+  }
   const response = await send();
   if (response.body?.code !== 22000 || ![
     "authorization_not_yet_valid", "EIP3009: authorization is not yet valid",
   ].includes(response.body?.msg) || response.status >= 500 || response.status === 429
     || response.body?.data?.charged || response.body?.data?.x402?.txn_hash) return response;
-  let authorization;
-  try { authorization = JSON.parse(Buffer.from(paymentHeader, "base64").toString("utf8")).payload.authorization; }
-  catch { return response; }
-  const timestamps = [authorization?.validAfter, authorization?.validBefore];
-  if (!timestamps.every((value) => /^\d+$/.test(String(value)))) return response;
-  const [after, before] = timestamps.map((value) => Number(value) * 1000);
-  if (![after, before].every(Number.isSafeInteger) || after >= before) return response;
+  if (!window) return response;
+  const { after, before } = window;
   const current = now();
   const delay = Math.max(3000, after + 3000 - current);
   if (delay > 10000 || current + delay >= before) return response;
@@ -980,9 +992,11 @@ export async function recoverPack({ intentId, confirmed, base = apiBase(), crede
   try {
     response = await submitSignedPayment({ base: intent.base, path: "packs", body: intent.request,
       paymentHeader: intent.paymentHeader, fetchImpl, now, wait });
-  } catch {
+  } catch (error) {
     lease.restore();
-    return { state: "purchase_unknown", recoveryId: intentId, next: "Do not purchase again. Explicitly recover this same payment or check the paying wallet's account." };
+    return { state: "purchase_unknown", recoveryId: intentId,
+      error: { code: error.code || error.cause?.code || "PAYMENT_REQUEST_FAILED", message: sanitize(error.message) },
+      next: "Do not purchase again. Explicitly recover this same payment or check the paying wallet's account." };
   }
   if (responseState(response) !== "complete") {
     lease.restore();
