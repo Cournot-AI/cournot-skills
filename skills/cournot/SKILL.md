@@ -16,10 +16,10 @@ metadata:
         description: Optional key overriding the saved credentials for COURNOT_API_KEY_BASE; never required for anonymous use.
       - name: COURNOT_API_KEY_BASE
         required: false
-        description: Origin that owns the environment key; defaults to interface.cournot.ai. Set explicitly for development keys.
+        description: Origin that owns the environment key; defaults to dev-interface.cournot.ai. Set explicitly for production keys.
       - name: COURNOT_API_BASE
         required: false
-        description: Optional API base override for testing; defaults to interface.cournot.ai; use dev-interface.cournot.ai explicitly for development.
+        description: Optional API base override for testing; defaults to dev-interface.cournot.ai during development; use interface.cournot.ai explicitly for production.
       - name: COURNOT_EVAL_ID
         required: false
         description: Optional evaluation identifier used only with a non-production API base.
@@ -71,13 +71,13 @@ For event queries only, also strip the optional `probability` prefix. The messag
 
 Never expose signing payloads or protocol parameters in any reply, including troubleshooting: domain/types/primaryType, signing chainId, urlPath, nonce, signing timestamp, parsed signing messages and internal request/intent IDs remain inside the client. Do not reconstruct them for display. This boundary has no technical-details exception; it does not remove the public payment terms needed for informed confirmation.
 
-Node.js 22.20 or newer is required. All API operations use `scripts/cournot-client.mjs`; credentials and wallet signatures stay inside the client. The default is **production**, `https://interface.cournot.ai`. `COURNOT_API_BASE=https://dev-interface.cournot.ai` selects development. Never silently change environments to work around a failure. API deployment and payment network are separate: dev payments can still transfer real mainnet assets.
+Node.js 22.20 or newer is required. All API operations use `scripts/cournot-client.mjs`; credentials and wallet signatures stay inside the client. The current default is **development**, `https://dev-interface.cournot.ai`. `COURNOT_API_BASE=https://interface.cournot.ai` selects production. Never silently change environments to work around a failure. API deployment and payment network are separate: dev payments can still transfer real mainnet assets.
 
 Each IP has **three free probability calls in total, with no reset**. Free allowance is used before prepaid calls. No key or wallet is required to start. After free calls, a configured key spends prepaid balance; otherwise the user chooses topup, import, or $0.01 per-call payment. Packs do not expire, stack, and are non-refundable. Prices and call counts come from the client's pack catalog; actual payment terms come from the server's 402 response.
 
 One user query permits one probability assessment, including free and prepaid calls. A confirmed 402 replay is part of that same assessment. Do not repeat completed account operations merely to verify the same result. The client waits three seconds before each initial paid submission and checks readable authorization expiry before and after waiting. It may internally retry the same signed payment once after an explicit authorization-not-yet-valid precheck rejection, within the original confirmed payment; see [payment.md](references/payment.md). No other automatic retries, background queries, automatic topup, or silent fallback from prepaid balance to per-call payment. Keep pending event text and selected market ids through disambiguation, credential setup, and payment confirmation. A completed topup does not automatically rerun the pending query.
 
-`COURNOT_API_KEY` overrides the file only for `COURNOT_API_KEY_BASE` (production by default; set explicitly for development keys). Otherwise the client reads a per-origin file beneath `~/.cournot/credentials/`. Files are plaintext protected by filesystem permissions, not an encrypted vault. Never read or edit them through the model. Use client commands for import, saving, recovery, and display. Only explicit `/cournot key` may reveal a complete key; all other output must remain masked. Never request wallet private keys or seed phrases.
+`COURNOT_API_KEY` overrides the file only for `COURNOT_API_KEY_BASE` (dev by default). Otherwise the client reads a per-origin file beneath `~/.cournot/credentials/`. Files are plaintext protected by filesystem permissions, not an encrypted vault. Never read or edit them through the model. Use client commands for import, saving, recovery, and display. Only explicit `/cournot key` may reveal a complete key; all other output must remain masked. Never request wallet private keys or seed phrases.
 
 On a successful probability response, read [response-format.md](references/response-format.md). Report the returned billing route and remaining calls; `charged=false` does not mean no prepaid call was consumed. Never manufacture a missing quota, promise a daily reset, or promise no deduction after an uncertain server failure.
 
