@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, readdirSync, readFileSync, statSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  DEV_BASE, PRODUCTION_BASE, apiBase, apiRequest, createCredentials, readAccount,
+  PRODUCTION_BASE, DEV_BASE, apiBase, apiRequest, createCredentials, readAccount,
   prepareAccountAuth, executeAccountAuth, sanitize,
 } from "../skills/cournot/scripts/account-flow.mjs";
 import {
@@ -86,17 +86,17 @@ function authWallet({ pending = false, developerMode = true } = {}) {
 test("credentials persist per origin, env overrides only its bound origin, and writes are private", (t) => {
   const env = { COURNOT_API_KEY: otherKey };
   const { credentials, directory } = fixture(t, env);
-  assert.equal(apiBase(), DEV_BASE);
+  assert.equal(apiBase(), PRODUCTION_BASE);
   assert.throws(() => apiBase("https://attacker.invalid"), /Unsupported/);
-  assert.throws(() => apiBase(`${DEV_BASE}/other`), /Unsupported/);
-  const saved = credentials.save(DEV_BASE, key);
+  assert.throws(() => apiBase(`${PRODUCTION_BASE}/other`), /Unsupported/);
+  const saved = credentials.save(PRODUCTION_BASE, key);
   assert.equal(saved.active, false);
-  assert.equal(credentials.read(DEV_BASE).key, otherKey);
-  assert.equal(credentials.read(PRODUCTION_BASE).key, null);
-  credentials.save(PRODUCTION_BASE, key);
-  env.COURNOT_API_KEY_BASE = PRODUCTION_BASE;
   assert.equal(credentials.read(PRODUCTION_BASE).key, otherKey);
-  assert.equal(credentials.read(DEV_BASE).key, key);
+  assert.equal(credentials.read(DEV_BASE).key, null);
+  credentials.save(DEV_BASE, key);
+  env.COURNOT_API_KEY_BASE = DEV_BASE;
+  assert.equal(credentials.read(DEV_BASE).key, otherKey);
+  assert.equal(credentials.read(PRODUCTION_BASE).key, key);
   assert.doesNotMatch(JSON.stringify(saved), new RegExp(key));
   const folder = join(directory, "credentials");
   if (process.platform !== "win32") {
@@ -108,17 +108,17 @@ test("credentials persist per origin, env overrides only its bound origin, and w
 
 test("import validates before saving, supports manual keys, and reveals only on explicit key read", async (t) => {
   const { credentials } = fixture(t);
-  credentials.save(DEV_BASE, key);
+  credentials.save(PRODUCTION_BASE, key);
   for (const importKey of ["", " \n\t"]) {
     await assert.rejects(readAccount({ credentials, importKey,
       fetchImpl: async () => assert.fail("Empty import must not query the saved key"),
     }), { code: "INVALID_KEY_FORMAT" });
-    assert.equal(credentials.read(DEV_BASE).key, key);
+    assert.equal(credentials.read(PRODUCTION_BASE).key, key);
   }
   const invalid = await readAccount({ credentials, importKey: otherKey,
     fetchImpl: async () => json({ code: 4100, msg: "api key is invalid" }) });
   assert.equal(invalid.state, "key_invalid");
-  assert.equal(credentials.read(DEV_BASE).key, key);
+  assert.equal(credentials.read(PRODUCTION_BASE).key, key);
   const kol = "ck_live_kol_example";
   const imported = await readAccount({ credentials, importKey: kol, fetchImpl: async (_url, init) => {
     assert.equal(init.headers["COURNOT-API-KEY"], kol);
@@ -131,20 +131,20 @@ test("import validates before saving, supports manual keys, and reveals only on 
   const shown = await readAccount({ credentials, reveal: true, fetchImpl: async () => account(kol) });
   assert.equal(shown.api_key, kol);
   assert.match(shown.secrecyWarning, /secret/);
-  assert.equal(credentials.read(DEV_BASE).key, kol);
+  assert.equal(credentials.read(PRODUCTION_BASE).key, kol);
 });
 
 test("corrupt credential file fails closed rather than switching billing", (t) => {
   const { credentials, directory } = fixture(t);
-  credentials.save(DEV_BASE, key);
+  credentials.save(PRODUCTION_BASE, key);
   writeFileSync(join(directory, "credentials", readdirSync(join(directory, "credentials"))[0]), "invalid");
-  assert.throws(() => credentials.read(DEV_BASE), /Cannot read/);
+  assert.throws(() => credentials.read(PRODUCTION_BASE), /Cannot read/);
   assert.doesNotMatch(JSON.stringify(sanitize({ msg: `invalid ${key}`, nested: { api_key: key } })), new RegExp(key));
 });
 
 test("free, prepaid and exhausted responses never touch a wallet or silently retry", async (t) => {
   const { credentials, intents } = fixture(t);
-  credentials.save(DEV_BASE, key);
+  credentials.save(PRODUCTION_BASE, key);
   const cases = [
     [json({ code: 0, data: { billing: "free_quota", charged: false, free_quota: { remaining: 2 }, api_key_quota: null } }), "complete"],
     [json({ code: 0, data: { billing: "api_key", charged: false, api_key_quota: balance } }), "complete"],
@@ -168,11 +168,11 @@ test("anonymous 402 offers three choices; explicit per-call bypasses key for thi
   const { credentials, intents } = fixture(t);
   const choice = await prepareProbability({ request, credentials, intents, fetchImpl: async () => challenge(), wallet: {} });
   assert.deepEqual(choice.choices, ["topup", "import", "per_call"]);
-  credentials.save(DEV_BASE, key);
+  credentials.save(PRODUCTION_BASE, key);
   const prepared = await prepareProbability({ request, credentials, intents, perCall: true, wallet: paymentWallet(),
     fetchImpl: async (_url, init) => { assert.equal(init.headers["COURNOT-API-KEY"], undefined); return challenge(); } });
   assert.equal(prepared.state, "payment_confirmation_required");
-  assert.equal(credentials.read(DEV_BASE).key, key);
+  assert.equal(credentials.read(PRODUCTION_BASE).key, key);
   assert.doesNotMatch(JSON.stringify(prepared), /secret-signature|secret-nonce/);
 });
 
@@ -180,7 +180,7 @@ test("pack confirmation pins environment, SKU, amount and selected wallet option
   const { credentials, intents } = fixture(t); const count = {}; const wallet = paymentWallet(count);
   let requests = 0;
   const prepared = await preparePack({ packId: "p20", intents, wallet, fetchImpl: async (url, init) => {
-    assert.equal(url, `${DEV_BASE}/intelligence/v1/packs`);
+    assert.equal(url, `${PRODUCTION_BASE}/intelligence/v1/packs`);
     assert.deepEqual(JSON.parse(init.body), { pack_id: "p20" }); return challenge();
   } });
   assert.equal(prepared.pack.price_usd, 20);
@@ -188,17 +188,17 @@ test("pack confirmation pins environment, SKU, amount and selected wallet option
   const options = { intentId: prepared.intentId, selectedOption: 1, intents, credentials, wallet,
     fetchImpl: async (url, init) => {
       requests++;
-      assert.equal(url, `${DEV_BASE}/intelligence/v1/packs`);
+      assert.equal(url, `${PRODUCTION_BASE}/intelligence/v1/packs`);
       assert.deepEqual(JSON.parse(init.body), { pack_id: "p20" });
       assert.ok(init.headers["PAYMENT-SIGNATURE"]);
       return json({ code: 0, data: { api_key: key, balance, pack: { pack_id: "p20", calls: 2800 }, charged: true } });
     } };
   await assert.rejects(executePayment({ ...options, confirmed: false }), /confirmation/);
-  await assert.rejects(executePayment({ ...options, confirmed: true, base: PRODUCTION_BASE }), /environment/);
+  await assert.rejects(executePayment({ ...options, confirmed: true, base: DEV_BASE }), /environment/);
   assert.equal(count.signs || 0, 0);
   const result = await executePayment({ ...options, confirmed: true });
   assert.equal(result.saved, true); assert.equal(result.balance.remaining, 599);
-  assert.equal(credentials.read(DEV_BASE).key, key);
+  assert.equal(credentials.read(PRODUCTION_BASE).key, key);
   assert.doesNotMatch(JSON.stringify(result), new RegExp(key));
   assert.equal(requests, 1); assert.equal(count.signs, 1);
   await assert.rejects(executePayment({ ...options, confirmed: true }), /already used/);
@@ -253,7 +253,7 @@ test("EIP-3009 chain timing: immediate success, not-yet-valid recovery, and expi
         return;
       }
       assert.equal(result.state, "purchase_unknown");
-      assert.equal(credentials.read(DEV_BASE).key, null);
+      assert.equal(credentials.read(PRODUCTION_BASE).key, null);
       await assert.rejects(recoverPack({ intentId: result.recoveryId, intents, credentials, fetchImpl }), /confirmation/);
       assert.equal(submissions, 1);
       chainTimestamp += 3;
@@ -263,10 +263,10 @@ test("EIP-3009 chain timing: immediate success, not-yet-valid recovery, and expi
       if (offset === 60) {
         // Waiting cannot fix expiry; a server rejection must remain unconfirmed.
         assert.equal(recovered.state, "purchase_unknown");
-        assert.equal(credentials.read(DEV_BASE).key, null);
+        assert.equal(credentials.read(PRODUCTION_BASE).key, null);
       } else {
         assert.equal(recovered.saved, true);
-        assert.equal(credentials.read(DEV_BASE).key, key);
+        assert.equal(credentials.read(PRODUCTION_BASE).key, key);
       }
     });
   }
@@ -345,21 +345,21 @@ test("EIP-712 recovery uses fixed typed data, normalizes 64+1 bytes, verifies wa
   const signedData = JSON.parse(JSON.parse(previewArgs[previewArgs.indexOf("--message") + 1]).params[1]);
   assert.doesNotMatch(JSON.stringify(prepared), /parsedMessage|primaryType|domain|nonce|timestamp|urlPath/);
   const options = { intentId: prepared.intentId, run, intents, credentials, fetchImpl: async (url, init) => {
-    assert.equal(url, `${DEV_BASE}/intelligence/v1/account`); assert.equal(init.method, "GET");
+    assert.equal(url, `${PRODUCTION_BASE}/intelligence/v1/account`); assert.equal(init.method, "GET");
     assert.equal(init.headers["X-COURNOT-SIGNATURE"], `0x${"ab".repeat(64)}01`);
     assert.equal(init.headers["X-COURNOT-NONCE"], signedData.message.nonce);
     return account();
   } };
   await assert.rejects(executeAccountAuth({ ...options, confirmed: false }), /confirmation/);
   const result = await executeAccountAuth({ ...options, confirmed: true });
-  assert.equal(result.saved, true); assert.equal(credentials.read(DEV_BASE).key, key);
+  assert.equal(result.saved, true); assert.equal(credentials.read(PRODUCTION_BASE).key, key);
   assert.doesNotMatch(JSON.stringify(result), /abababab|"api_key"/);
   assert.equal(calls.filter((x) => x[1] === "execute").length, 1);
 });
 
 test("rotation waits for user confirmation and App completion without signing twice", async (t) => {
   const { intents, credentials } = fixture(t); const { run, calls } = authWallet({ pending: true });
-  credentials.save(DEV_BASE, key);
+  credentials.save(PRODUCTION_BASE, key);
   const prepared = prepareAccountAuth({ action: "rotate", run, intents });
   assert.match(prepared.warning, /every device/);
   assert.doesNotMatch(JSON.stringify(prepared), /parsedMessage|primaryType|domain|nonce|timestamp|urlPath/);
@@ -368,33 +368,33 @@ test("rotation waits for user confirmation and App completion without signing tw
   assert.equal(signedData.message.urlPath, "/intelligence/v1/key/rotate");
   let posts = 0;
   const options = { intents, credentials, run, fetchImpl: async (url, init) => {
-    posts++; assert.equal(url, `${DEV_BASE}/intelligence/v1/key/rotate`); assert.equal(init.method, "POST");
+    posts++; assert.equal(url, `${PRODUCTION_BASE}/intelligence/v1/key/rotate`); assert.equal(init.method, "POST");
     assert.equal(init.body, undefined); return account(otherKey);
   } };
   const pending = await executeAccountAuth({ ...options, intentId: prepared.intentId, confirmed: true });
   assert.equal(pending.state, "signature_pending"); assert.equal(posts, 0);
   const result = await executeAccountAuth({ ...options, intentId: pending.intentId, poll: true });
   assert.equal(result.saved, true); assert.equal(posts, 1);
-  assert.equal(credentials.read(DEV_BASE).key, otherKey);
+  assert.equal(credentials.read(PRODUCTION_BASE).key, otherKey);
   assert.equal(calls.filter((x) => x[1] === "execute").length, 1);
   assert.equal(calls.filter((x) => x[1] === "result").length, 1);
 });
 
 test("rotation failure and wrong-wallet results never replace a credential or retry", async (t) => {
   const { intents, credentials } = fixture(t); const { run } = authWallet();
-  credentials.save(DEV_BASE, key);
+  credentials.save(PRODUCTION_BASE, key);
   for (const response of [() => json({ code: 22004, msg: "manual api key can not be rotated" }), () => { throw new Error("timeout"); }]) {
     const prepared = prepareAccountAuth({ action: "rotate", run, intents });
     let calls = 0;
     const result = await executeAccountAuth({ intentId: prepared.intentId, confirmed: true, intents, credentials, run,
       fetchImpl: async () => { calls++; return response(); } });
     assert.ok(["api_error", "account_result_unknown"].includes(result.state));
-    assert.equal(calls, 1); assert.equal(credentials.read(DEV_BASE).key, key);
+    assert.equal(calls, 1); assert.equal(credentials.read(PRODUCTION_BASE).key, key);
   }
   const prepared = prepareAccountAuth({ action: "account", run, intents });
   await assert.rejects(executeAccountAuth({ intentId: prepared.intentId, confirmed: true, intents, credentials, run,
     fetchImpl: async () => json({ code: 0, data: { api_key: otherKey, wallet: "0xwrong", balance } }) }), /did not match/);
-  assert.equal(credentials.read(DEV_BASE).key, key);
+  assert.equal(credentials.read(PRODUCTION_BASE).key, key);
 });
 
 test("developer-mode-disabled never previews or executes a signature", (t) => {
@@ -428,13 +428,13 @@ test("CLI runs through an absolute symlinked path instead of silently skipping m
 
 test("evaluation storage and request headers stay isolated from real environments", async (t) => {
   const { directory, credentials } = fixture(t);
-  credentials.save(DEV_BASE, key);
+  credentials.save(PRODUCTION_BASE, key);
   const isolated = createCredentials({ env: { COURNOT_CREDENTIAL_DIR: directory } });
-  assert.equal(isolated.read(DEV_BASE).key, key);
+  assert.equal(isolated.read(PRODUCTION_BASE).key, key);
   const previous = process.env.COURNOT_EVAL_ID;
   process.env.COURNOT_EVAL_ID = "isolated-case";
   try {
-    for (const base of [DEV_BASE, PRODUCTION_BASE, "http://127.0.0.1:8765"]) {
+    for (const base of [PRODUCTION_BASE, DEV_BASE, "http://127.0.0.1:8765"]) {
       await apiRequest({ base, path: "account", fetchImpl: async (_url, init) => {
         assert.equal(init.headers["X-Eval-Id"], base.startsWith("http://127.") ? "isolated-case" : undefined);
         return account();
@@ -449,7 +449,7 @@ test("evaluation storage and request headers stay isolated from real environment
 
 test("pack selection shows the development discount only for the development origin", () => {
   const client = fileURLToPath(new URL("../skills/cournot/scripts/cournot-client.mjs", import.meta.url));
-  for (const base of [DEV_BASE, PRODUCTION_BASE, "http://127.0.0.1:8765"]) {
+  for (const base of [PRODUCTION_BASE, DEV_BASE, "http://127.0.0.1:8765"]) {
     const result = spawnSync(process.execPath, [client, "packs", "--language", "zh"], {
       env: { ...process.env, COURNOT_API_BASE: base }, encoding: "utf8",
     });
@@ -465,6 +465,21 @@ test("pack selection shows the development discount only for the development ori
   }
 });
 
+
+test("production is the default and explicit development requests stay on development", async (t) => {
+  const { credentials, intents } = fixture(t);
+  assert.equal(PRODUCTION_BASE, "https://interface.cournot.ai");
+  assert.throws(() => apiBase("https://pro.cournot.ai"), /Unsupported/);
+  for (const base of [undefined, DEV_BASE]) {
+    await prepareProbability({ request, credentials, intents, ...(base ? { base } : {}),
+      wallet: { preview() { assert.fail("Free request must not touch the wallet"); } },
+      fetchImpl: async (url) => {
+        assert.equal(url, `${base || PRODUCTION_BASE}/intelligence/v1/probability`);
+        return json({ code: 0, data: { probability: 0.5 } });
+      },
+    });
+  }
+});
 test("paid submissions wait after signing, preserve errors, and never send expired authorizations", async (t) => {
   const cases = [
     { name: "success", before: "1060", calls: 1, waits: 1 },

@@ -186,7 +186,7 @@ async function postProbability(fetchImpl, request, paymentHeader, { base = apiBa
   const headers = {};
   if (paymentHeader) headers["PAYMENT-SIGNATURE"] = paymentHeader;
   if (key && !paymentHeader) headers["COURNOT-API-KEY"] = key;
-  if (base !== PRODUCTION_BASE && base !== "https://interface.cournot.ai" && process.env.COURNOT_EVAL_ID) {
+  if (base !== PRODUCTION_BASE && process.env.COURNOT_EVAL_ID) {
     headers["X-Eval-Id"] = process.env.COURNOT_EVAL_ID;
   }
   return apiRequest({ base, path: "probability", method: "POST", body: request, headers, fetchImpl });
