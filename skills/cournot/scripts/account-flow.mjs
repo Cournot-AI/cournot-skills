@@ -15,7 +15,7 @@ export function fail(message, code = "INVALID_INPUT") {
   throw Object.assign(new Error(message), { code });
 }
 
-export function apiBase(value = process.env.COURNOT_API_BASE || PRODUCTION_BASE) {
+export function apiBase(value = process.env.COURNOT_API_BASE || DEV_BASE) {
   const base = value.replace(/\/$/, "");
   if (![DEV_BASE, PRODUCTION_BASE].includes(base) &&
       !/^http:\/\/127\.0\.0\.1:\d+$/.test(base)) {
@@ -51,7 +51,7 @@ export function createCredentials({ env = process.env, directory = env.COURNOT_C
   return {
     read(base) {
       base = apiBase(base);
-      if (env.COURNOT_API_KEY && apiBase(env.COURNOT_API_KEY_BASE || PRODUCTION_BASE) === base) {
+      if (env.COURNOT_API_KEY && apiBase(env.COURNOT_API_KEY_BASE || DEV_BASE) === base) {
         return { key: validateKey(env.COURNOT_API_KEY), source: "environment" };
       }
       try {
