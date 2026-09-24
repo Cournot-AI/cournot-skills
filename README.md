@@ -46,9 +46,9 @@ Cournot returns the answer, not its proprietary algorithm.
 
 ## Runtime Access
 
-Requires Node.js 22.20 or newer. During development the default API is `https://dev-interface.cournot.ai`; explicitly set `COURNOT_API_BASE=https://pro.cournot.ai` for production. All calls use the bundled client.
+Requires Node.js 22.20 or newer. The default API is `https://interface.cournot.ai`. For development, explicitly set `COURNOT_API_BASE=https://dev-interface.cournot.ai`. All calls use the bundled client.
 
-No key or wallet is needed to start. Keys are stored in a user-level, per-origin file under `~/.cournot/credentials/`, shared across agents on the same OS account. These are plaintext files protected by filesystem permissions, not an encrypted vault. `COURNOT_API_KEY` can override the file for `COURNOT_API_KEY_BASE` (dev by default); set the key's base explicitly for production. Never put credentials in the project or commit them.
+No key or wallet is needed to start. Keys are stored in a user-level, per-origin file under `~/.cournot/credentials/`, shared across agents on the same OS account. These are plaintext files protected by filesystem permissions, not an encrypted vault. `COURNOT_API_KEY` can override the file for `COURNOT_API_KEY_BASE` (production by default); set `COURNOT_API_KEY_BASE=https://dev-interface.cournot.ai` explicitly for development keys. Never put credentials in the project or commit them.
 
 ## Pricing and account commands
 

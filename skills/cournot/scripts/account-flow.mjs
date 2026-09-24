@@ -4,7 +4,7 @@ import { join, dirname } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 
 export const DEV_BASE = "https://dev-interface.cournot.ai";
-export const PRODUCTION_BASE = "https://pro.cournot.ai";
+export const PRODUCTION_BASE = "https://interface.cournot.ai";
 export const PACKS = [
   { pack_id: "p5", name: "Starter", price_usd: 5, calls: 600 },
   { pack_id: "p20", name: "Standard", price_usd: 20, calls: 2800 },
@@ -15,9 +15,9 @@ export function fail(message, code = "INVALID_INPUT") {
   throw Object.assign(new Error(message), { code });
 }
 
-export function apiBase(value = process.env.COURNOT_API_BASE || DEV_BASE) {
+export function apiBase(value = process.env.COURNOT_API_BASE || PRODUCTION_BASE) {
   const base = value.replace(/\/$/, "");
-  if (![DEV_BASE, PRODUCTION_BASE, "https://interface.cournot.ai"].includes(base) &&
+  if (![DEV_BASE, PRODUCTION_BASE].includes(base) &&
       !/^http:\/\/127\.0\.0\.1:\d+$/.test(base)) {
     fail("Unsupported Cournot API base", "INVALID_API_BASE");
   }
@@ -51,7 +51,7 @@ export function createCredentials({ env = process.env, directory = env.COURNOT_C
   return {
     read(base) {
       base = apiBase(base);
-      if (env.COURNOT_API_KEY && apiBase(env.COURNOT_API_KEY_BASE || DEV_BASE) === base) {
+      if (env.COURNOT_API_KEY && apiBase(env.COURNOT_API_KEY_BASE || PRODUCTION_BASE) === base) {
         return { key: validateKey(env.COURNOT_API_KEY), source: "environment" };
       }
       try {
