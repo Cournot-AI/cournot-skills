@@ -2,8 +2,9 @@
 
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -47,22 +48,28 @@ const require = createRequire(import.meta.url);
 const skillsPackageRoot = dirname(require.resolve("skills/package.json"));
 const skillsCli = join(skillsPackageRoot, "bin", "cli.mjs");
 const forwardedOptions = options.filter((option) => option !== "--copy");
-const result = spawnSync(
-  process.execPath,
-  [skillsCli, "add", source, "--copy", ...forwardedOptions],
-  {
-    cwd: process.cwd(),
-    env: process.env,
-    stdio: "inherit",
+let staging;
+let exitCode = 1;
+try {
+  let installSource = source;
+  const localSource = resolve(source);
+  if (existsSync(localSource) && statSync(localSource).isDirectory()) {
+    // The upstream local copy does not honor .gitignore. Keep evaluation
+    // scripts and raw logs out of both direct-skill and repository installs.
+    staging = mkdtempSync(join(tmpdir(), "cournot-skills-install-"));
+    installSource = join(staging, basename(localSource));
+    const excluded = new Set(["evals", ".git", "node_modules", "__pycache__"]);
+    cpSync(localSource, installSource, { recursive: true,
+      filter: (path) => path === localSource || !excluded.has(basename(path)) });
   }
-);
-
-if (result.error) {
-  console.error(
-    `cournot-skills: failed to start the skills installer: ${result.error.message}`
-  );
-  process.exit(1);
+  const result = spawnSync(process.execPath,
+    [skillsCli, "add", installSource, "--copy", ...forwardedOptions],
+    { cwd: process.cwd(), env: process.env, stdio: "inherit" });
+  if (result.error) throw result.error;
+  exitCode = result.status ?? 1;
+} catch (error) {
+  console.error(`cournot-skills: installation failed: ${error.message}`);
+} finally {
+  if (staging) rmSync(staging, { recursive: true, force: true });
 }
-
-const exitCode = result.status ?? 1;
 process.exit(exitCode);

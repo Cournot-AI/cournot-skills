@@ -12,7 +12,7 @@ node <skill-root>/scripts/cournot-client.mjs import
 
 `import` reads the key from **stdin**, not arguments. Use a tool's stdin channel or a hidden local terminal prompt. Do not construct `echo <key>` / inline shell commands containing the secret. If secure input is unavailable, ask the user to run the command locally and supply the key through stdin. Do not echo an imported key back into chat.
 
-- `balance`: show balance and masked key. Label `balance.remaining` as the available balance (“剩余次数”), `balance.total` as total calls (“总次数”), and `balance.used` as used calls (“已使用”); never label total calls as the available balance. Apply these labels to every account/key/purchase result. `/account` does not return the free allowance; do not promise that it does.
+- `balance`: show balance and masked key. Label `balance.remaining` as remaining calls, `balance.total` as total calls, and `balance.used` as used calls, localized to the user's language; never label total calls as the available balance. Apply these labels to every account/key/purchase result. `/account` does not return the free allowance; do not promise that it does.
 - `key`: run the `key` command first to verify and display the saved key; do not start wallet recovery unless that command reports missing or invalid credentials. This is the only explicit action allowed to reveal `api_key`. Include the client's secrecy warning.
 - `import`: validate through `/account` before atomically replacing the saved key. Report import success only when the client returns `credentialSource=import` and `saved=true`; an ordinary account read does not prove import. Invalid or empty keys preserve the old file. Accept KOL/manual keys, including those with no wallet. Import never rotates a key or buys a pack.
 - `credential_missing`: ordinary queries still work anonymously. For an explicit `key` request, offer wallet recovery below; for balance, explain that no local key is configured and offer import or wallet recovery.
@@ -50,7 +50,7 @@ For `signature_confirmation_required`, apply the shared customer-communication p
 
 The client owns the signing payload and confirmation state. Keep protocol data internal and unchanged; obtain confirmation before execution. Payment authorization does not authorize key rotation.
 
-At this preview stage, ask for confirmation in chat. Direct the user to confirm in the Binance App only after execution returns `signature_pending`; a prepared preview alone does not mean an App confirmation is waiting. Label account balances as numbers of calls (“次”), not currency.
+At this preview stage, ask for confirmation in chat. Direct the user to confirm in the Binance App only after execution returns `signature_pending`; a prepared preview alone does not mean an App confirmation is waiting. Label account balances as numbers of calls in the user's language, not currency.
 
 ```sh
 node <skill-root>/scripts/cournot-client.mjs auth-execute --intent '<intentId>' --confirmed true

@@ -1,6 +1,6 @@
 # Query flow
 
-Use this flow for every Cournot query. The API base is defined in `SKILL.md`.
+Use this flow only for event probability queries. For divergence rankings, use [divergence-flow.md](divergence-flow.md). During development, resolve and probability use `https://dev-interface.cournot.ai`, including events that contain the word `divergence`. Do not carry over the separate divergence service's command override. Explicit operator-configured targets are defined in `SKILL.md`.
 
 Before resolving, check any market IDs explicitly supplied by the user. If there are more than 10, explain the maximum and ask them to choose up to 10; do not resolve a different set of candidates or call probability.
 

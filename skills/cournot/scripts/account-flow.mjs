@@ -2,8 +2,10 @@ import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSy
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
+import { validateDivergenceLimit } from "./divergence-flow.mjs";
 
 export const DEV_BASE = "https://dev-interface.cournot.ai";
+export const ALTERNATE_DEV_BASE = "https://dev-interface.cournot.ai";
 export const PRODUCTION_BASE = "https://interface.cournot.ai";
 export const PACKS = [
   { pack_id: "p5", name: "Starter", price_usd: 5, calls: 600 },
@@ -17,7 +19,7 @@ export function fail(message, code = "INVALID_INPUT") {
 
 export function apiBase(value = process.env.COURNOT_API_BASE || DEV_BASE) {
   const base = value.replace(/\/$/, "");
-  if (![DEV_BASE, PRODUCTION_BASE].includes(base) &&
+  if (![DEV_BASE, ALTERNATE_DEV_BASE, PRODUCTION_BASE].includes(base) &&
       !/^http:\/\/127\.0\.0\.1:\d+$/.test(base)) {
     fail("Unsupported Cournot API base", "INVALID_API_BASE");
   }
@@ -83,12 +85,15 @@ export function createCredentials({ env = process.env, directory = env.COURNOT_C
   };
 }
 
-export async function apiRequest({ base = apiBase(), path, method = "GET", body, headers = {}, fetchImpl = fetch }) {
-  if (!["resolve", "probability", "packs", "account", "key/rotate"].includes(path)) fail("Invalid API path");
-  const response = await fetchImpl(`${apiBase(base)}/intelligence/v1/${path}`, {
-    method, headers: { "content-type": "application/json",
-      ...(/^http:\/\/127\.0\.0\.1:\d+$/.test(base) && process.env.COURNOT_EVAL_ID ? { "X-Eval-Id": process.env.COURNOT_EVAL_ID } : {}),
-      ...headers },
+export async function apiRequest({ base = apiBase(), path, method = "GET", body, limit, headers = {}, fetchImpl = fetch }) {
+  if (!["resolve", "probability", "divergence", "packs", "account", "key/rotate"].includes(path)) fail("Invalid API path");
+  if (path === "divergence") {
+    validateDivergenceLimit(limit);
+    if (method !== "GET" || body !== undefined) fail("Divergence requires GET without a body");
+  } else if (limit !== undefined) fail("Limit is only supported for divergence");
+  const query = limit === undefined ? "" : `?limit=${limit}`;
+  const response = await fetchImpl(`${apiBase(base)}/intelligence/v1/${path}${query}`, {
+    method, headers: { "content-type": "application/json", ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     redirect: "error", signal: AbortSignal.timeout(path === "probability" ? 120_000 : 30_000),
   });
