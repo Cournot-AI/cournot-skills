@@ -16,7 +16,7 @@ The pack catalog is bundled with the client, not fetched from the server. Use th
 node <skill-root>/scripts/cournot-client.mjs packs --language '<zh or en>'
 ```
 
-When `presentation` is returned, use it verbatim as the complete pack-selection response; it contains the prices, terms and question. For older clients without `presentation`, show all returned tiers with call counts and list prices, include the applicable pricing explanation above, then ask which pack the user wants (for example, “你想选择哪个套餐？”). Continue with `topup --pack` only after the user selects a pack. Never choose a tier or recommend the largest by default. Before purchase, explain that calls never expire, stack, and are non-refundable, and that losing both wallet access and key prevents recovery. Credit belongs to the **paying wallet**; successful purchase saves that wallet's key on this machine, which may replace an imported KOL or different-wallet key. This is not a transfer of credit to the currently imported key.
+When `presentation` is returned, use it verbatim as the complete pack-selection response; it contains the prices, terms and question. For older clients without `presentation`, show all returned tiers with call counts and list prices, include the applicable pricing explanation above, then ask which pack the user wants in their language (for example, “Which pack would you like?”). Continue with `topup --pack` only after the user selects a pack. Never choose a tier or recommend the largest by default. Before purchase, explain that calls never expire, stack, and are non-refundable, and that losing both wallet access and key prevents recovery. Credit belongs to the **paying wallet**; successful purchase saves that wallet's key on this machine, which may replace an imported KOL or different-wallet key. This is not a transfer of credit to the currently imported key.
 
 ```sh
 node <skill-root>/scripts/cournot-client.mjs topup --pack '<selected pack_id>' --language '<zh or en>'
@@ -24,9 +24,9 @@ node <skill-root>/scripts/cournot-client.mjs topup --pack '<selected pack_id>' -
 
 Only `p5`, `p20`, `p50` are supported by the current catalog. Dev charges $0.01 per pack according to the backend contract, while the catalog shows the $5/$20/$50 list price; always confirm the actual amount and chain from the fresh server preview. Dev BSC can use real mainnet funds. Do not alter amounts to match the catalog.
 
-Before a confirmed purchase result, describe the pack as containing calls (“包含 600 次”), not as already credited (“到账 600 次”).
+Before a confirmed purchase result, describe the pack as containing calls (“includes 600 calls”), not as already credited (“600 calls added”), using the user's language.
 
-Use the shared payment confirmation and execute flow below. Purchase success saves credentials internally and returns the balance and a masked key. Report the save result and any environment override warning. Do not automatically rerun a pending probability request after topup.
+Use the shared payment confirmation and execute flow below. Purchase success saves credentials internally and returns the balance and a masked key. Report the save result and any environment override warning. Do not automatically rerun a pending probability or divergence request after topup.
 
 For `credential_save_failed`, explain that the purchase credited the wallet but the local key could not be saved. Follow wallet account recovery in [account.md](account.md); do not purchase or rotate again.
 
@@ -40,7 +40,9 @@ Recovery reuses the original environment, SKU and payment authorization; no new 
 
 ## Choose per-call payment
 
-On exhausted free or prepaid calls, first offer topup, import and per-call payment equally. Only after the user chooses per-call payment, invoke the original query's `prepare` command with `--per-call true`. Wallet setup is only needed after that choice. A malformed/expired key should instead be repaired or replaced; never silently fall back to payment.
+For divergence payment previews, localize with `--labels-json` only. Never add the pack commands' `--language` option to `divergence`; it is invalid and prevents the HTTP request.
+
+On exhausted free or prepaid calls, first offer topup, import and per-call payment equally. Only after the user chooses per-call payment, invoke the original query command with `--per-call true`: `prepare --request-base64 ...` for probability, or `divergence [--limit N --count-text <original-count>] --labels-json <original-labels-json>` for divergence. Preserve the original count (including omission), row labels and API origin. The divergence paid replay remains GET with no body. Wallet setup is only needed after that choice. A malformed/expired key should instead be repaired or replaced; never silently fall back to payment.
 
 ## Payment preview
 
@@ -89,7 +91,8 @@ For both packs and per-call payments, the client can retry the exact original si
 
 This internal retry is covered by the original payment confirmation; do not ask for another confirmation or announce a failure before the command finishes. The client waits at least three seconds and until local `validAfter + 3 seconds`, with a maximum ten-second wait, and checks expiry before and after waiting. This buffer does not guarantee chain readiness; a second failure stops. It never changes the signature, nonce, amount, selected route or request, and never signs again. If the command returns failure/uncertainty, the automatic attempt is over: follow the existing stop/recovery rules, without starting another loop.
 
-- `state=complete`: for a probability intent, render `response` using `references/response-format.md`; for a pack intent, report returned pack, balance, masked key and save result.
+- `state=complete`: for a probability intent, render `response` using `references/response-format.md`; for a divergence intent, compose the header and metadata lines around unchanged `rows_markdown` per [divergence-flow.md](divergence-flow.md); for a pack intent, report returned pack, balance, masked key and save result.
+- `state=invalid_response`: the returned ranking cannot be safely rendered; preserve billing evidence, explain the incomplete result and stop without retrying.
 - `state=payment_failed`: explain the returned failure using [errors.md](errors.md) and stop. Do not reuse the intent or retry automatically.
 - `state=approval_pending`: show the approval transaction hash. After it confirms, prepare a fresh payment; display and confirm any changed terms before executing again.
 - A command error consumes an intent once wallet authorization has begun. Do not automatically prepare or pay again. For purchases follow the recovery rules above; for probability calls report uncertainty and stop.
@@ -100,21 +103,21 @@ Never execute without confirmation, silently switch an option, pay for a differe
 
 For `state=wallet_blocked`, report only the returned `blockers` and stop. Do not show the wallet setup menu again. For a route blocker, label it with `networkLabel`, `tokenSymbol`, and `tokenAddress`; apply the legacy display fallback when normalized labels are absent. For a wallet-scoped blocker, identify the selected wallet and operation, and explain the returned reasons using [errors.md](errors.md), then offer only: retry the selected wallet operation, explicitly switch wallet, or stop. Do not infer another cause or silently switch routes or wallets.
 
-Explain known blocker codes in the user's language without printing the codes; use [errors.md](errors.md). For a per-call query, say no probability was obtained and no payment executed; for topup, say the pack was not purchased and no payment executed. For unknown reasons, describe the blocked operation without guessing a cause or copying raw diagnostics.
+Explain known blocker codes in the user's language without printing the codes; use [errors.md](errors.md). For a per-call query, say no probability or divergence ranking (according to the pending operation) was obtained and no payment executed; for topup, say the pack was not purchased and no payment executed. For unknown reasons, describe the blocked operation without guessing a cause or copying raw diagnostics.
 
 For `state=wallet_required`, output the returned `presentation` as the complete user-facing response and stop. Preserve it verbatim except for the legacy display fallback above when it visibly contains a raw known network, long token name, or known base-unit amount. Do not otherwise rewrite, summarize, translate, reorder, merge, or omit any part of it. The client generates this stable presentation in the user's language and includes the requirements below.
 
-1. For a per-call query, state that a wallet is needed, no probability was obtained, and no payment occurred. Mention exhausted allowance only when established by the preceding query result. For topup, state that a wallet is required and the pack has not been purchased; do not claim that free quota is exhausted.
+1. For a per-call query, state that a wallet is needed, no probability or divergence ranking (according to the pending operation) was obtained, and no payment occurred. Mention exhausted allowance only when established by the preceding query result. For topup, state that a wallet is required and the pack has not been purchased; do not claim that free quota is exhausted.
 2. Show every `serverOptions` entry in server order in one table with exactly these concepts: display number, network, asset, amount, and recipient.
    - Network must use `networkLabel` exactly. Warn that mainnet uses real assets.
    - Asset must include `tokenSymbol` when non-null and the full `asset` contract address.
-   - Amount must use `amountLabel`. Never show protocol base-unit integers as a human payment amount and never label a column “raw amount” or “原始金额”. If `amountLabel` explicitly says `base units`, preserve that qualification because token decimals were unavailable.
+   - Amount must use `amountLabel`. Never show protocol base-unit integers as a human payment amount and never label a column “raw amount” in any language. If `amountLabel` explicitly says `base units`, preserve that qualification because token decimals were unavailable.
    - Recipient must use the complete `payTo` address.
 3. Combine setup references and actions into one short menu. Include all three `walletSetup.options` names and clickable URLs in their returned order. Mark Binance Agentic Wallet as recommended. Do not omit x402 Foundation Buyer Quickstart or viem Local Accounts.
 4. Always offer these four actions: connect/install Binance Agentic Wallet, configure the x402 buyer with viem after a separate setup confirmation, connect another compatible wallet, or stop without paying.
-5. When responding in Chinese and Binance Agentic Wallet is installed but unconnected, end with this explicit action: `如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。` Do not replace `登录钱包` with a slash-separated label.
+5. When Binance Agentic Wallet is installed but unconnected, end with this explicit action in the user's language: `If you already have a Binance Agentic Wallet, reply "sign in to wallet"; if you have not created one, create it in the Binance App first.` Do not replace the sign-in action with a slash-separated label.
 
-When Binance Agentic Wallet is installed but `walletStatus` is `UNCONNECTED`, say it is installed but not signed in. If the user already has an Agentic Wallet, offer “登录钱包” / “sign in to wallet”; the Binance flow will run `auth signin`, display its pairing code and link, then keep `auth verify` alive until confirmation. If the user has never created one, direct them to create it in the Binance App first.
+When Binance Agentic Wallet is installed but `walletStatus` is `UNCONNECTED`, say it is installed but not signed in. If the user already has an Agentic Wallet, offer “sign in to wallet” in their language; the Binance flow will run `auth signin`, display its pairing code and link, then keep `auth verify` alive until confirmation. If the user has never created one, direct them to create it in the Binance App first.
 
 The required setup references are:
 
@@ -129,9 +132,9 @@ By default, only show these official options and wait for the user's choice. If 
 3. After confirmation, follow the selected wallet or SDK's official setup flow. It may generate a wallet or accept an existing key only through its secure, non-echoing credential prompt. Never ask the user to paste a private key, seed phrase, session token, or wallet credential into chat, and never pass one through a command argument, environment variable, or captured tool output. If secure hidden input is unavailable, provide the official local setup command for the user to run and stop.
 4. Report only the public wallet address, selected network, supported asset, and next funding step. Do not expose credentials or raw wallet output.
 
-Once the user chooses a wallet, preserve that selection throughout installation, sign-in, connection checks, and funding. Do not show the generic wallet chooser or ask them to select the same wallet again. Complete the selected wallet's official setup before rerunning `prepare`. If setup is blocked, explain that wallet's returned blocker using [errors.md](errors.md) and offer retry, explicit switch, or stop.
+Once the user chooses a wallet, preserve that selection throughout installation, sign-in, connection checks, and funding. Do not show the generic wallet chooser or ask them to select the same wallet again. Complete the selected wallet's official setup before rerunning the original query command with `--per-call true`. If setup is blocked, explain that wallet's returned blocker using [errors.md](errors.md) and offer retry, explicit switch, or stop.
 
-Setup confirmation authorizes only wallet setup. It does not authorize a transfer. After setup, rerun `prepare` for the preserved Cournot request, show fresh payment terms, and obtain the normal explicit payment confirmation immediately before signing.
+Setup confirmation authorizes only wallet setup. It does not authorize a transfer. After setup, rerun the preserved probability `prepare` or `divergence` command with `--per-call true`, show fresh payment terms, and obtain the normal explicit payment confirmation immediately before signing.
 
 Install it only after an explicit request:
 
@@ -139,4 +142,4 @@ Install it only after an explicit request:
 npx skills add binance/binance-skills-hub/skills/binance-web3/binance-agentic-wallet
 ```
 
-After wallet setup, rerun `prepare` for the preserved Cournot request so the client obtains fresh payment terms.
+After wallet setup, rerun the preserved probability `prepare` or `divergence` command with `--per-call true` so the client obtains fresh payment terms.

@@ -1,6 +1,6 @@
 ---
 name: cournot
-description: Query Cournot probabilities and manage prepaid calls, balances, and API keys. Use only for /cournot or an explicit request to use Cournot, not for casual odds questions.
+description: Query Cournot probabilities and divergence rankings; manage prepaid calls, balances, and API keys. Use only for /cournot or an explicit request to use Cournot, not for casual odds questions.
 metadata:
   openclaw:
     homepage: https://skill.cournot.ai/
@@ -20,9 +20,6 @@ metadata:
       - name: COURNOT_API_BASE
         required: false
         description: Optional API base override for testing; defaults to dev-interface.cournot.ai during development; use interface.cournot.ai explicitly for production.
-      - name: COURNOT_EVAL_ID
-        required: false
-        description: Optional evaluation identifier used only with a non-production API base.
       - name: COURNOT_WALLET_COMMAND
         required: false
         description: Optional compatible wallet command; defaults to baw when a paid request requires a wallet.
@@ -40,7 +37,7 @@ Use only for `/cournot` or an explicit request to use Cournot. Reply in the user
 Apply these principles silently to every customer-facing message, across queries, account operations, payments, recovery and troubleshooting. They govern how to write; they are not content to announce or explain to the customer:
 
 - Ground the reply in the actual request and client result. Explain the current status, consequences for the user, and the next useful action. Distinguish a planned operation from a completed one; retain uncertainty when completion, payment or remaining calls is unconfirmed.
-- Use the language of the user's actual request consistently in all replies, with ordinary product terms and clear units. Do not infer the customer's language from documentation, examples or tool-output language. In Chinese, use 密钥, 轮换, 次 and 最新付款预览 for their respective concepts. Preserve API evidence and market-title wording according to the query and response references. Brevity applies to explanatory prose, not to required result fields: do not omit data required by a response contract.
+- Use the language of the user's actual request consistently in all replies, with ordinary product terms and clear units. Do not infer the customer's language from documentation, examples or tool-output language. Localize terms such as API key, rotation, calls and latest payment preview naturally. Preserve API evidence and market-title wording according to the query and response references. Brevity applies to explanatory prose, not to required result fields: do not omit data required by a response contract.
 - Keep communication proportional to the decision. Acknowledge the current task briefly without narrating a plan or requesting authorization. Give further progress only when there is a meaningful update or delay. Present an available result or choice directly. Do not narrate internal reading, routing, validation, debugging, formatting or test activity, or repeat information without a user need. Keep the focus on the operation. Do not announce that you are following instructions, using a particular reply language, filtering information or withholding internal details; these are writing decisions, not task progress. Omit unrelated warnings.
 - In confirmation requests, show information needed to understand or authorize the operation, such as its wallet, payment terms and effects.
 - Keep API deployment details internal across all customer replies: do not display development/production/local environment labels, API origins or service URLs, including account results, pack choices, confirmations and errors. Payment networks and public payment terms remain decision-relevant and must still be shown.
@@ -58,6 +55,7 @@ After removing `/cournot` and outer whitespace, match these complete commands. D
 
 | Input | Action / reference |
 |---|---|
+| `divergence [count]` (first word only) | Cached pricing-divergence ranking — [divergence-flow.md](references/divergence-flow.md) |
 | `balance` | Read balance and masked key — [account.md](references/account.md) |
 | `key` | Show the full key, or recover it using the wallet — [account.md](references/account.md) |
 | `import <key>` | Validate and save an existing key — [account.md](references/account.md) |
@@ -65,20 +63,26 @@ After removing `/cournot` and outer whitespace, match these complete commands. D
 | `topup` | Let the user select a pack, preview and confirm payment — [payment.md](references/payment.md) |
 | Anything else | Event query — [query-flow.md](references/query-flow.md) |
 
-For event queries only, also strip the optional `probability` prefix. The message is the user's event in their own words. If no claim with an asset, threshold, or date remains, ask for one without calling the API. Cournot has no mispricing API; explain this and stop on a mispricing request.
+For divergence, validate the count before announcing or starting a query: it must be an integer from 1 to 100, or omitted for the default 10. Invalid or ambiguous counts require correction with no API call. For example, `2.5` must be rejected, never rounded or truncated to `2`; `101` must not become `100`. When supplying `--limit`, also pass the user's unchanged count suffix as `--count-text` so the client cross-checks the conversion.
+
+For divergence, you write the heading, column labels and explanatory lines in the user's language. The JS client supplies `rows_markdown`: insert those data rows unchanged. **Each link destination must equal its original API `url` character for character**, including every query parameter such as `op_market_ticker`, even when it repeats the path. Never shorten, normalize or reconstruct a URL. Follow the output contract and row-verification procedure in [divergence-flow.md](references/divergence-flow.md).
+
+For event queries only, also strip the optional `probability` prefix. The message is the user's event in their own words. Require a specific, testable event claim before calling resolve. An asset name or a request such as "BTC related markets" is only a topic, not a claim: ask what outcome, threshold or time horizon the user wants to assess, without an API call. Do not invent a claim to search for them. Guide pricing-divergence or mispricing requests to `/cournot divergence`. An event containing `divergence` elsewhere remains an event query. The divergence flow never calls resolve or probability.
 
 ## Runtime and billing
 
 Never expose signing payloads or protocol parameters in any reply, including troubleshooting: domain/types/primaryType, signing chainId, urlPath, nonce, signing timestamp, parsed signing messages and internal request/intent IDs remain inside the client. Do not reconstruct them for display. This boundary has no technical-details exception; it does not remove the public payment terms needed for informed confirmation.
 
-Node.js 22.20 or newer is required. All API operations use `scripts/cournot-client.mjs`; credentials and wallet signatures stay inside the client. The current default is **development**, `https://dev-interface.cournot.ai`. `COURNOT_API_BASE=https://interface.cournot.ai` selects production. Never silently change environments to work around a failure. API deployment and payment network are separate: dev payments can still transfer real mainnet assets.
+Node.js 22.20 or newer is required. All API operations use `scripts/cournot-client.mjs`; credentials and wallet signatures stay inside the client. During current development, event queries (`resolve` and `probability`) and standalone account/pack operations use the existing service, `https://dev-interface.cournot.ai`, which remains the client default. The new divergence endpoint uses a separate service, `https://dev-interface.cournot.ai`: apply `COURNOT_API_BASE` to that command only, as shown in [divergence-flow.md](references/divergence-flow.md). Do not export the divergence origin globally or send event queries there. `COURNOT_API_BASE=https://interface.cournot.ai` explicitly selects production; preserve an operator's explicit target for that operation. Never switch services to work around a failure.
 
-Each IP has **three free probability calls in total, with no reset**. Free allowance is used before prepaid calls. No key or wallet is required to start. After free calls, a configured key spends prepaid balance; otherwise the user chooses topup, import, or $0.01 per-call payment. Packs do not expire, stack, and are non-refundable. Prices and call counts come from the client's pack catalog; actual payment terms come from the server's 402 response.
+Keep any import, balance, topup, payment execution or recovery follow-up on its pending request's origin, using the same command-scoped override. A later unrelated event query returns to the existing event service. Keys remain bound to their exact origin; set `COURNOT_API_KEY_BASE` to the key's own origin and never copy a key between services. API deployment and payment network are separate: dev payments can still transfer real mainnet assets.
 
-One user query permits one probability assessment, including free and prepaid calls. A confirmed 402 replay is part of that same assessment. Do not repeat completed account operations merely to verify the same result. The client waits three seconds before each initial paid submission and checks readable authorization expiry before and after waiting. It may internally retry the same signed payment once after an explicit authorization-not-yet-valid precheck rejection, within the original confirmed payment; see [payment.md](references/payment.md). No other automatic retries, background queries, automatic topup, or silent fallback from prepaid balance to per-call payment. Keep pending event text and selected market ids through disambiguation, credential setup, and payment confirmation. A completed topup does not automatically rerun the pending query.
+The billing contract provides **three free calls per IP in total, shared by probability and divergence within a service, with no reset**. Do not infer shared balances or free allowance between the two development services; use the selected service's returned quota. Free allowance is used before prepaid calls. No key or wallet is required to start. After free calls, a configured key spends prepaid balance; otherwise the user chooses topup, import, or $0.01 per-call payment. Packs do not expire, stack, and are non-refundable. Prices and call counts come from the client's pack catalog; actual payment terms come from the server's 402 response.
+
+One user query permits one probability assessment or divergence request, including free and prepaid calls. Divergence count does not change the per-request charge; an empty ranking is free. A confirmed 402 replay is part of that same assessment. Do not repeat completed account operations merely to verify the same result. The client waits three seconds before each initial paid submission and checks readable authorization expiry before and after waiting. It may internally retry the same signed payment once after an explicit authorization-not-yet-valid precheck rejection, within the original confirmed payment; see [payment.md](references/payment.md). No other automatic retries, background queries, automatic topup, or silent fallback from prepaid balance to per-call payment. Keep the pending operation, event text and selected market ids, or divergence count and language through disambiguation, credential setup, and payment confirmation. A completed topup does not automatically rerun the pending query.
 
 `COURNOT_API_KEY` overrides the file only for `COURNOT_API_KEY_BASE` (dev by default). Otherwise the client reads a per-origin file beneath `~/.cournot/credentials/`. Files are plaintext protected by filesystem permissions, not an encrypted vault. Never read or edit them through the model. Use client commands for import, saving, recovery, and display. Only explicit `/cournot key` may reveal a complete key; all other output must remain masked. Never request wallet private keys or seed phrases.
 
-On a successful probability response, read [response-format.md](references/response-format.md). Report the returned billing route and remaining calls; `charged=false` does not mean no prepaid call was consumed. Never manufacture a missing quota, promise a daily reset, or promise no deduction after an uncertain server failure.
+On a successful probability response, read [response-format.md](references/response-format.md). Returned market and evidence URLs are opaque identifiers: preserve every character, including repeated words, casing and query values. Never regenerate a link from its title or apparent meaning. For divergence, preserve the generated data rows and verify the draft as described in [divergence-flow.md](references/divergence-flow.md). A changed or missing URL is an incorrect result; correct the draft before sending it. Report the returned billing route and remaining calls; `charged=false` does not mean no prepaid call was consumed. Never manufacture a missing quota, promise a daily reset, or promise no deduction after an uncertain server failure.
 
-Claude Code, Codex, Grok, OpenClaw, and other Agent Skills hosts use this same folder. Install the entire `skills/cournot/` folder, including scripts and references.
+Claude Code, Codex, Grok, OpenClaw, and other Agent Skills hosts use this same folder. Install `SKILL.md`, `agents/`, `scripts/` and `references/` from `skills/cournot/`.

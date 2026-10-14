@@ -4,9 +4,9 @@ Read this reference after a successful probability response.
 
 Use only fields returned by the API. Do not browse for more evidence, produce another estimate, or invent sources, weights, scenarios, per-source probabilities, links, advice, or rationale. The Cournot result is the answer.
 
-If `result` is present, use its returned fields for the assessment summary. Prefer `result.point_estimate` for the headline. Use the display-normalized market title only in that probability headline. Never add a separate `Reference market:` / `参考市场：` line or repeat the market title and market price below the headline. Display all returned `result` fields in one markdown table using only columns actually returned. Render probability decimals as percentages without changing their meaning: `0.035` → `3.5%`, `[0.02, 0.06]` → `2%–6%`. Leave enum strings unchanged.
+If `result` is present, use its returned fields for the assessment summary. Prefer `result.point_estimate` for the headline. Use the display-normalized market title only in that probability headline. Never add a separate `Reference market:` line in any language or repeat the market title and market price below the headline. Display all returned `result` fields in one markdown table using only columns actually returned. Render probability decimals as percentages without changing their meaning: `0.035` → `3.5%`, `[0.02, 0.06]` → `2%–6%`. Leave enum strings unchanged.
 
-Whenever `basis` is present and non-empty, displaying it is mandatory. Introduce it as `External data basis:` in English or `外部数据依据：` in Chinese, then render every returned field in API order as markdown tables. Do not omit sections or move their content into prose. Copy string values verbatim without translating, paraphrasing, shortening, or supplementing them. Escape `|` in cells and replace embedded newlines so tables remain valid.
+Whenever `basis` is present and non-empty, displaying it is mandatory. Introduce it as `External data basis:`, localized to the user's language, then render every returned field in API order as markdown tables. Do not omit sections or move their content into prose. Copy string values verbatim without translating, paraphrasing, shortening, or supplementing them. Escape `|` in cells and replace embedded newlines so tables remain valid.
 
 The client removes each basis `url` field and embeds every valid HTTP(S) link into display text. When a `summary` contains quoted text, that quoted text is the link; otherwise the entire `summary` value is the link. Keep `source` as plain text. Preserve this Markdown exactly so it remains clickable. Never add a separate `url` column or print a bare basis URL.
 
@@ -43,7 +43,7 @@ External data basis:
 {Billing route and remaining calls from the returned fields.} This is an assessment of pricing, not investment advice.
 ```
 
-Use `data.billing` for the footer. Its field names and the `charged` flag are internal interpretation rules, not text to print or explain to the customer. Use a short natural sentence such as “本次使用预付次数，剩余 586 次。” or “This used a free call; 2 remain.” Do not print `free_quota`, `api_key` or `charged=false` as billing labels.
+Use `data.billing` for the footer. Its field names and the `charged` flag are internal interpretation rules, not text to print or explain to the customer. Use a short natural sentence in the user's language, such as “This used a prepaid call; 586 remain.” or “This used a free call; 2 remain.” Do not print `free_quota`, `api_key` or `charged=false` as billing labels.
 
 Interpret billing as follows:
 

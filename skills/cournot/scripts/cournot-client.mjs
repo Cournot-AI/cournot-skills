@@ -23,8 +23,9 @@ import {
 
 import {
   apiBase, apiRequest, createCredentials, sanitize, responseState, PACKS,
-  accountResult, readAccount, prepareAccountAuth, executeAccountAuth, PRODUCTION_BASE,
+  accountResult, readAccount, prepareAccountAuth, executeAccountAuth,
 } from "./account-flow.mjs";
+import { formatDivergenceRows, validateDivergenceLimit, validateDivergenceLabels, validateDivergenceCountText } from "./divergence-flow.mjs";
 const INTENT_TTL_MS = 30 * 60 * 1000;
 const APPROVAL_WAIT_MS = 45 * 1000;
 const APPROVAL_POLL_MS = 3 * 1000;
@@ -186,9 +187,6 @@ async function postProbability(fetchImpl, request, paymentHeader, { base = apiBa
   const headers = {};
   if (paymentHeader) headers["PAYMENT-SIGNATURE"] = paymentHeader;
   if (key && !paymentHeader) headers["COURNOT-API-KEY"] = key;
-  if (base !== PRODUCTION_BASE && process.env.COURNOT_EVAL_ID) {
-    headers["X-Eval-Id"] = process.env.COURNOT_EVAL_ID;
-  }
   return apiRequest({ base, path: "probability", method: "POST", body: request, headers, fetchImpl });
 }
 
@@ -569,7 +567,7 @@ function walletRequiredPresentation({ request, reason, walletStatus, serverOptio
           : "currently unavailable";
 
   if (chinese) {
-    return `${request.pack_id ? "购买流量包需要可用的钱包，尚未付款。" : "本次查询需要可用的钱包，尚未获得概率结果，也未发生任何付款。"}
+    return `${request.pack_id ? "购买流量包需要可用的钱包，尚未付款。" : request.operation === "divergence" ? "本次查询需要可用的钱包，尚未获得偏差榜单，也未发生任何付款。" : "本次查询需要可用的钱包，尚未获得概率结果，也未发生任何付款。"}
 
 可用付款路线：
 
@@ -590,7 +588,7 @@ ${hasMainnet ? "\n主网付款会转移真实资产。" : ""}
 ${walletStatus === "UNCONNECTED" ? "如果你已有 Binance Agentic Wallet，请回复“登录钱包”；如果尚未创建，需要先在 Binance App 中创建。" : "请选择一种设置方式，或选择停止。"}`;
   }
 
-  return `${request.pack_id ? "A wallet is required to purchase this pack. No payment occurred." : "A wallet is needed for this query. No probability was obtained and no payment occurred."}
+  return `${request.pack_id ? "A wallet is required to purchase this pack. No payment occurred." : request.operation === "divergence" ? "A wallet is needed for this query. No divergence ranking was obtained and no payment occurred." : "A wallet is needed for this query. No probability was obtained and no payment occurred."}
 
 Available payment routes:
 
@@ -755,6 +753,36 @@ export async function prepareProbability({
   return preparePayment({ initial, originalRequest, base, path: "probability", wallet, intents });
 }
 
+function divergenceResult(result, request, paid = false) {
+  const output = redactSensitive({ state: responseState(result), httpStatus: result.status,
+    response: normalizeResponseForDisplay(result.body) });
+  if (output.state === "complete") {
+    try { output.rows_markdown = formatDivergenceRows(output.response, request); }
+    catch (error) {
+      output.state = "invalid_response";
+      output.error = { code: error.code, message: error.message };
+      output.next = "The response cannot be displayed as a divergence ranking. Report any returned billing route and quota; only missing billing evidence is uncertain. Do not retry automatically.";
+    }
+  } else if (paid) output.state = "payment_failed";
+  return output;
+}
+
+export async function prepareDivergence({ limit, labels, fetchImpl = fetch,
+  wallet = createBinanceWalletRunner(), intents = createFileIntentStore(), base = apiBase(),
+  credentials = createCredentials(), perCall = false } = {}) {
+  validateDivergenceLimit(limit);
+  labels = validateDivergenceLabels(labels);
+  base = apiBase(base);
+  const originalRequest = { ...(limit === undefined ? {} : { limit }), labels };
+  const key = perCall ? null : credentials.read(base).key;
+  const headers = key ? { "COURNOT-API-KEY": key } : {};
+  const initial = await apiRequest({ base, path: "divergence", limit, headers, fetchImpl });
+  if (initial.status !== 402) return divergenceResult(initial, originalRequest);
+  if (!perCall) return { state: key ? "pack_exhausted" : "payment_choice_required", choices: ["topup", "import", "per_call"] };
+  return preparePayment({ initial, originalRequest, base, path: "divergence", wallet, intents,
+    presentationRequest: { message: labels.cournot_above, operation: "divergence" } });
+}
+
 export async function preparePack({ packId, language = "en", fetchImpl = fetch,
   wallet = createBinanceWalletRunner(), intents = createFileIntentStore(), base = apiBase() } = {}) {
   const pack = PACKS.find((item) => item.pack_id === String(packId).trim().toLowerCase());
@@ -863,7 +891,7 @@ function parseSignedPayment(result) {
 
 // Retry only a specific authorization precheck rejection, never an ambiguous
 // settlement/network failure. The original signed header and request are reused.
-async function submitSignedPayment({ paymentHeader, now, wait, ...request }) {
+async function submitSignedPayment({ paymentHeader, now, wait, method = "POST", ...request }) {
   let window;
   try {
     const authorization = JSON.parse(Buffer.from(paymentHeader, "base64").toString("utf8")).payload.authorization;
@@ -873,7 +901,7 @@ async function submitSignedPayment({ paymentHeader, now, wait, ...request }) {
       if ([after, before].every(Number.isSafeInteger) && after < before) window = { after, before };
     }
   } catch { /* Other supported payment schemes may not have an authorization window. */ }
-  const send = () => apiRequest({ ...request, method: "POST", headers: { "PAYMENT-SIGNATURE": paymentHeader } });
+  const send = () => apiRequest({ ...request, method, headers: { "PAYMENT-SIGNATURE": paymentHeader } });
   if (window && now() + PAYMENT_SETTLE_DELAY_MS >= window.before) {
     fail("Payment authorization expires before submission", "PAYMENT_AUTHORIZATION_EXPIRED");
   }
@@ -915,9 +943,16 @@ export async function executePayment({
 
   const lease = intents.take(intentId);
   const intent = lease.value;
-  if (intent.kind !== "payment" || intent.base !== apiBase(base) || !["probability", "packs"].includes(intent.path)) {
+  if (intent.kind !== "payment" || intent.base !== apiBase(base) || !["probability", "divergence", "packs"].includes(intent.path)) {
     lease.restore();
     fail("Payment intent belongs to another operation or environment", "INTENT_MISMATCH");
+  }
+  if (intent.path === "divergence") {
+    try {
+      if (!isObject(intent.request)) fail("Invalid divergence payment request");
+      validateDivergenceLimit(intent.request.limit);
+      validateDivergenceLabels(intent.request.labels);
+    } catch (error) { lease.restore(); throw error; }
   }
   const selected = intent.ready[selectedOption - 1];
   if (!selected) {
@@ -967,8 +1002,10 @@ export async function executePayment({
       const recoveryId = intents.save({ kind: "pack_recovery", base: intent.base, request: intent.request, paymentHeader });
       return recoverPack({ intentId: recoveryId, confirmed: true, base, credentials, intents, fetchImpl, now, wait });
     }
-    const paid = await submitSignedPayment({ base: intent.base, path: "probability", body: intent.request,
+    const paid = await submitSignedPayment({ base: intent.base, path: intent.path,
+      ...(intent.path === "divergence" ? { method: "GET", limit: intent.request.limit } : { body: intent.request }),
       paymentHeader, fetchImpl, now, wait });
+    if (intent.path === "divergence") return divergenceResult(paid, intent.request, true);
     const settled = paid.status >= 200 && paid.status < 300 && paid.body?.code === 0;
     return redactSensitive({
       state: settled ? "complete" : "payment_failed", httpStatus: paid.status,
@@ -1053,6 +1090,20 @@ ${zh ? "你想选择哪个套餐？" : "Which pack would you like?"}`;
 
 async function runCli() {
   const { command, args } = parseArgs(process.argv.slice(2));
+  if (command === "divergence") {
+    if (Object.keys(args).some((key) => !["limit", "count-text", "labels-json", "per-call", "output"].includes(key))) fail("Unknown divergence argument");
+    if (args.limit !== undefined && !/^\d+$/.test(args.limit)) fail("Divergence limit must be an integer from 1 to 100");
+    if (args["per-call"] !== undefined && !["true", "false"].includes(args["per-call"])) fail("--per-call must be true or false");
+    if (args.output !== undefined && !["json", "markdown"].includes(args.output)) fail("--output must be json or markdown");
+    const limit = args.limit === undefined ? undefined : Number(args.limit);
+    validateDivergenceCountText(limit, args["count-text"]);
+    let labels;
+    if (args["labels-json"] !== undefined) {
+      try { labels = JSON.parse(args["labels-json"]); } catch { fail("--labels-json must be a JSON object"); }
+    }
+    const result = await prepareDivergence({ limit, labels, perCall: args["per-call"] === "true" });
+    return args.output === "markdown" && result.state === "complete" ? result.rows_markdown : result;
+  }
   if (command === "prepare") {
     return prepareProbability({ request: decodeRequest(args["request-base64"]), perCall: args["per-call"] === "true" });
   }
@@ -1079,7 +1130,7 @@ async function runCli() {
     return { state: responseState(response), response: sanitize(response.body) };
   }
   fail(
-    "Usage: cournot-client.mjs resolve|prepare --request-base64 <json-base64> [--per-call true] | packs | topup --pack <id> | execute --intent <id> --selected-option <n> --confirmed true | balance | key | import (stdin) | auth-prepare --action account|rotate | auth-execute --intent <id> --confirmed true | auth-status --intent <id> | recover-purchase --intent <id> --confirmed true"
+    "Usage: cournot-client.mjs divergence [--limit <1-100> --count-text <original-count>] [--labels-json <localized-row-labels>] [--output json|markdown] [--per-call true] | resolve|prepare --request-base64 <json-base64> [--per-call true] | packs | topup --pack <id> | execute --intent <id> --selected-option <n> --confirmed true | balance | key | import (stdin) | auth-prepare --action account|rotate | auth-execute --intent <id> --confirmed true | auth-status --intent <id> | recover-purchase --intent <id> --confirmed true"
   );
 }
 
@@ -1091,7 +1142,8 @@ function isMain() {
 
 if (isMain()) {
   try {
-    console.log(JSON.stringify(await runCli()));
+    const result = await runCli();
+    console.log(typeof result === "string" ? result : JSON.stringify(result));
   } catch (error) {
     console.error(
       JSON.stringify({

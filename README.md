@@ -36,6 +36,16 @@ Ask Cournot about a prediction-market event in plain language:
 
 You can also explicitly ask your agent to use Cournot. If several markets match, Cournot shows the candidates and lets you choose before requesting a probability. Market resolution and disambiguation are free.
 
+Query the cached divergence ranking without resolving an event or calculating new probabilities:
+
+```text
+/cournot divergence
+/cournot divergence top 20
+/cournot divergence 50
+```
+
+The first word after `/cournot` must be `divergence`. Omit the count for the backend default of 10; explicit counts must be integers from 1 to 100. Results use the documented nine-column table, snapshot times and billing footer. Sorting and market eligibility come from the backend. An empty ranking is free.
+
 ## What You Get
 
 - Cournot's probability estimate
@@ -46,13 +56,13 @@ Cournot returns the answer, not its proprietary algorithm.
 
 ## Runtime Access
 
-Requires Node.js 22.20 or newer. During development the default API is `https://dev-interface.cournot.ai`; explicitly set `COURNOT_API_BASE=https://interface.cournot.ai` for production. All calls use the bundled client.
+Requires Node.js 22.20 or newer. During development, event queries and standalone account/pack operations use the existing default service, `https://dev-interface.cournot.ai`. Divergence uses the separate `https://dev-interface.cournot.ai` service with a command-scoped `COURNOT_API_BASE` override; do not export it globally for event queries. Keep follow-up account/payment commands on their pending operation's origin. Keys stay isolated by origin; `COURNOT_API_KEY_BASE` identifies the environment key's own service. Explicitly set `COURNOT_API_BASE=https://interface.cournot.ai` for production. All calls use the bundled client.
 
 No key or wallet is needed to start. Keys are stored in a user-level, per-origin file under `~/.cournot/credentials/`, shared across agents on the same OS account. These are plaintext files protected by filesystem permissions, not an encrypted vault. `COURNOT_API_KEY` can override the file for `COURNOT_API_KEY_BASE` (dev by default); set the key's base explicitly for production. Never put credentials in the project or commit them.
 
 ## Pricing and account commands
 
-Each IP gets three free probability calls **in total**, with no reset. Free calls are used before prepaid calls. Once exhausted, choose a pack, import an existing key, or explicitly approve a $0.01 per-call payment. No automatic topup or payment fallback.
+Each IP gets three free calls **in total**, shared by probability and divergence, with no reset. Free calls are used before prepaid calls. Once exhausted, choose a pack, import an existing key, or explicitly approve a $0.01 per-call payment. No automatic topup or payment fallback.
 
 | Pack | List price | Calls |
 |---|---|---|
@@ -92,29 +102,32 @@ After the wallet is ready, the agent can return to the pending Cournot question 
 
 Cournot never asks for a private key or seed phrase and never holds user funds. Never paste wallet secrets into a conversation. A wallet should keep credentials in its own secure storage and provide only the authorization needed for each payment.
 
-Paid probability requests run through the bundled Cournot client. It keeps the wallet authorization and paid HTTP replay outside the model context; the agent receives only a sanitized payment preview before confirmation and the final Cournot response afterward.
+Paid probability and divergence requests run through the bundled Cournot client. It keeps the wallet authorization and paid HTTP replay outside the model context; the agent receives only a sanitized payment preview before confirmation and the final Cournot response afterward.
 
 ## Repository Structure
 
-The npm wrapper invokes the pinned `skills` CLI with copy mode.
+The npm wrapper invokes the pinned `skills` CLI with copy mode. Installed skills contain only runtime instructions, scripts, references and agent metadata.
 
 ```text
 ├── bin/
 │   └── cournot-skills.mjs
-├── skills/
-│   └── cournot/
-│       ├── SKILL.md
-│       ├── scripts/
-│       │   ├── cournot-client.mjs
-│       │   ├── payment-flow.mjs
-│       │   └── account-flow.mjs
-│       └── references/
-│           ├── account.md
-│           ├── payment.md
-│           ├── query-flow.md
-│           └── response-format.md
-└── tests/
-    └── account-flow.test.mjs
+└── skills/
+    └── cournot/
+        ├── SKILL.md
+        ├── agents/
+        │   └── openai.yaml
+        ├── scripts/
+        │   ├── cournot-client.mjs
+        │   ├── divergence-flow.mjs
+        │   ├── verify-output.mjs
+        │   ├── payment-flow.mjs
+        │   └── account-flow.mjs
+        └── references/
+            ├── account.md
+            ├── payment.md
+            ├── divergence-flow.md
+            ├── query-flow.md
+            └── response-format.md
 ```
 
 ## Disclaimer
