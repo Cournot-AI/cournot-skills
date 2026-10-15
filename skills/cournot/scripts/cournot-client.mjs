@@ -26,6 +26,7 @@ import {
   accountResult, readAccount, prepareAccountAuth, executeAccountAuth,
 } from "./account-flow.mjs";
 import { formatDivergenceRows, validateDivergenceLimit, validateDivergenceLabels, validateDivergenceCountText } from "./divergence-flow.mjs";
+import { firstDivergencePage, readDivergencePage } from "./divergence-pages.mjs";
 const INTENT_TTL_MS = 30 * 60 * 1000;
 const APPROVAL_WAIT_MS = 45 * 1000;
 const APPROVAL_POLL_MS = 3 * 1000;
@@ -757,7 +758,10 @@ function divergenceResult(result, request, paid = false) {
   const output = redactSensitive({ state: responseState(result), httpStatus: result.status,
     response: normalizeResponseForDisplay(result.body) });
   if (output.state === "complete") {
-    try { output.rows_markdown = formatDivergenceRows(output.response, request); }
+    try {
+      output.rows_markdown = formatDivergenceRows(output.response, request);
+      return firstDivergencePage(output, request);
+    }
     catch (error) {
       output.state = "invalid_response";
       output.error = { code: error.code, message: error.message };
@@ -1089,7 +1093,15 @@ ${zh ? "你想选择哪个套餐？" : "Which pack would you like?"}`;
 }
 
 async function runCli() {
-  const { command, args } = parseArgs(process.argv.slice(2));
+  const usage = "Usage: cournot-client.mjs divergence --labels-json <localized-row-labels> [--limit <1-100> --count-text <original-count>] [--output json|markdown] [--per-call true] | divergence-page --snapshot <saved-file> --page <1-5> | resolve|prepare --request-base64 <json-base64> [--per-call true] | packs | topup --pack <id> | execute --intent <id> --selected-option <n> --confirmed true | balance | key | import (stdin) | auth-prepare --action account|rotate | auth-execute --intent <id> --confirmed true | auth-status --intent <id> | recover-purchase --intent <id> --confirmed true";
+  const argv = process.argv.slice(2);
+  if ((argv.length === 1 && argv[0] === "--help") || (argv.length === 2 && argv[1] === "--help")) return usage;
+  const { command, args } = parseArgs(argv);
+  if (command === "divergence-page") {
+    if (Object.keys(args).some(key => !["snapshot", "page"].includes(key)) ||
+        !/^\d+$/.test(args.page ?? "")) fail("Use divergence-page --snapshot <saved-file> --page <integer>");
+    return redactSensitive(readDivergencePage(args.snapshot, Number(args.page)));
+  }
   if (command === "divergence") {
     if (Object.keys(args).some((key) => !["limit", "count-text", "labels-json", "per-call", "output"].includes(key))) fail("Unknown divergence argument");
     if (args.limit !== undefined && !/^\d+$/.test(args.limit)) fail("Divergence limit must be an integer from 1 to 100");
@@ -1129,9 +1141,7 @@ async function runCli() {
     const response = await apiRequest({ path: "resolve", method: "POST", body: decodeRequest(args["request-base64"]) });
     return { state: responseState(response), response: sanitize(response.body) };
   }
-  fail(
-    "Usage: cournot-client.mjs divergence [--limit <1-100> --count-text <original-count>] [--labels-json <localized-row-labels>] [--output json|markdown] [--per-call true] | resolve|prepare --request-base64 <json-base64> [--per-call true] | packs | topup --pack <id> | execute --intent <id> --selected-option <n> --confirmed true | balance | key | import (stdin) | auth-prepare --action account|rotate | auth-execute --intent <id> --confirmed true | auth-status --intent <id> | recover-purchase --intent <id> --confirmed true"
-  );
+  fail(usage);
 }
 
 function isMain() {

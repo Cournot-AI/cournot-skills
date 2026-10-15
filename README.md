@@ -44,7 +44,7 @@ Query the cached divergence ranking without resolving an event or calculating ne
 /cournot divergence 50
 ```
 
-The first word after `/cournot` must be `divergence`. Omit the count for the backend default of 10; explicit counts must be integers from 1 to 100. Results use the documented nine-column table, snapshot times and billing footer. Sorting and market eligibility come from the backend. An empty ranking is free.
+The first word after `/cournot` must be `divergence`. Omit the count for the backend default of 10; explicit counts must be integers from 1 to 100. Results use the documented nine-column table, snapshot times and billing footer, with at most 20 markets per reply. A request for 100 fetches the full ranking once and shows page 1; ask for the next page or a page number to read the same saved result without another API call or charge. Sorting and market eligibility come from the backend. An empty ranking is free.
 
 ## What You Get
 
@@ -119,6 +119,7 @@ The npm wrapper invokes the pinned `skills` CLI with copy mode. Installed skills
         ├── scripts/
         │   ├── cournot-client.mjs
         │   ├── divergence-flow.mjs
+        │   ├── divergence-pages.mjs
         │   ├── verify-output.mjs
         │   ├── payment-flow.mjs
         │   └── account-flow.mjs
