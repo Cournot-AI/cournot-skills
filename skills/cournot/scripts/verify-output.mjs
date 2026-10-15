@@ -2,6 +2,7 @@
 
 import { readFileSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { DIVERGENCE_PAGE_SIZE } from "./divergence-pages.mjs";
 
 // Check immutable data rows; the agent owns headings and explanatory prose.
 try {
@@ -20,6 +21,9 @@ try {
   const lines = draft.toString("utf8").split(/\r?\n/);
   if (!draft.toString("utf8").trim()) throw new Error("The final draft is empty.");
   const expected = result.rows_markdown ? result.rows_markdown.split("\n") : [];
+  if (expected.length > DIVERGENCE_PAGE_SIZE) {
+    throw new Error("Display only the current page, at most 20 markets per reply. Read the saved snapshot with divergence-page.");
+  }
   const positions = lines.flatMap((line, index) => /^\|\s*\d+\s*\|/.test(line) ? [index] : []);
   const actual = positions.map(index => lines[index]);
   if (actual.length !== expected.length || actual.some((line, index) => line !== expected[index])) {

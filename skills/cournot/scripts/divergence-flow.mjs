@@ -6,15 +6,13 @@ export function validateDivergenceLimit(limit) {
   return limit;
 }
 
-// The caller supplies wording; rendering does not select or detect a language.
-export function validateDivergenceLabels(labels = {
-  cournot_above: "Cournot above market", cournot_below: "Cournot below market", link: "View",
-}) {
+// Require the caller's localized wording; never silently fall back to English.
+export function validateDivergenceLabels(labels) {
   const keys = ["cournot_above", "cournot_below", "link"];
   if (!labels || typeof labels !== "object" || Array.isArray(labels) ||
       Object.keys(labels).some(key => !keys.includes(key)) ||
       keys.some(key => typeof labels[key] !== "string" || !labels[key].trim() || /[\r\n\u2028\u2029]/u.test(labels[key]))) {
-    throw Object.assign(new Error("Provide single-line cournot_above, cournot_below and link labels"), { code: "INVALID_INPUT" });
+    throw Object.assign(new Error("Provide --labels-json with single-line cournot_above, cournot_below and link labels in the user's language"), { code: "INVALID_INPUT" });
   }
   return { ...labels };
 }
