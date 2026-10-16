@@ -86,7 +86,7 @@ export function formatDivergenceRows(response, { limit = 10, labels } = {}) {
     }
     if (!["cournot_above", "cournot_below"].includes(item.direction)) invalid("direction");
     const deviationPp = Math.round(Number((item.deviation * 100).toPrecision(12)));
-    return `| ${item.rank} | ${cell(title(item.title))} | ${cell(platforms[item.source.toLowerCase()] || item.source)} | ${cell(labels[item.direction])} | ${percent(item.cournot_price)}% | ${percent(item.market_price)}¢ | ${deviationPp}pp | $${number(item.market_liquidity)} | ${link(item.url, labels.link)} |`;
+    return `| ${item.rank} | ${cell(title(item.title))} | ${cell(platforms[item.source.toLowerCase()] || item.source)} | ${cell(labels[item.direction])} | ${(item.cournot_price * 100).toFixed(1)}% | ${percent(item.market_price)}¢ | ${deviationPp}pp | $${number(item.market_liquidity)} | ${link(item.url, labels.link)} |`;
   });
   return rows.join("\n");
 }
