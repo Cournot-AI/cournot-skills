@@ -56,9 +56,9 @@ Cournot returns the answer, not its proprietary algorithm.
 
 ## Runtime Access
 
-Requires Node.js 22.20 or newer. During development, event queries and standalone account/pack operations use the existing default service, `https://dev-interface.cournot.ai`. Divergence uses the separate `https://dev-interface.cournot.ai` service with a command-scoped `COURNOT_API_BASE` override; do not export it globally for event queries. Keep follow-up account/payment commands on their pending operation's origin. Keys stay isolated by origin; `COURNOT_API_KEY_BASE` identifies the environment key's own service. Explicitly set `COURNOT_API_BASE=https://interface.cournot.ai` for production. All calls use the bundled client.
+Requires Node.js 22.20 or newer. All production operations, including event queries, divergence rankings, accounts and packs, use `https://interface.cournot.ai` by default. All calls use the bundled client. `COURNOT_API_BASE` may explicitly select another supported environment; keep follow-up commands on the pending operation's origin. Keys stay isolated by origin, and `COURNOT_API_KEY_BASE` identifies the environment key's own origin.
 
-No key or wallet is needed to start. Keys are stored in a user-level, per-origin file under `~/.cournot/credentials/`, shared across agents on the same OS account. These are plaintext files protected by filesystem permissions, not an encrypted vault. `COURNOT_API_KEY` can override the file for `COURNOT_API_KEY_BASE` (dev by default); set the key's base explicitly for production. Never put credentials in the project or commit them.
+No key or wallet is needed to start. Keys are stored in a user-level, per-origin file under `~/.cournot/credentials/`, shared across agents on the same OS account. These are plaintext files protected by filesystem permissions, not an encrypted vault. `COURNOT_API_KEY` can override the file for `COURNOT_API_KEY_BASE` (production by default); set the key's base explicitly for other service origins. Never put credentials in the project or commit them.
 
 ## Pricing and account commands
 
@@ -70,7 +70,7 @@ Each IP gets three free calls **in total**, shared by probability and divergence
 | Standard | $20 | 2,800 |
 | Scale | $50 | 8,000 |
 
-Prepaid calls stack, never expire and are non-refundable. Dev packs currently charge $0.01; the payment preview is authoritative and may still use real mainnet assets. Catalog changes require updating the skill.
+Prepaid calls stack, never expire and are non-refundable. The payment preview determines the actual amount, asset and network; mainnet payments use real assets. Catalog changes require updating the skill.
 
 ```text
 /cournot balance

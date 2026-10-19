@@ -19,10 +19,10 @@ Never pass `--language` to `divergence`, including payment previews with `--per-
 Example in English (localize the values for the actual user):
 
 ```sh
-COURNOT_API_BASE=https://dev-interface.cournot.ai node <skill-root>/scripts/cournot-client.mjs divergence --labels-json '{"cournot_above":"Cournot above market","cournot_below":"Cournot below market","link":"View"}' > '<unique-page-result.json>'
+node <skill-root>/scripts/cournot-client.mjs divergence --labels-json '{"cournot_above":"Cournot above market","cournot_below":"Cournot below market","link":"View"}' > '<unique-page-result.json>'
 ```
 
-This command-scoped override selects the new divergence service during development. It must not change the default service for later event queries. Preserve the same origin for this operation's payment preview, execution, credential setup and account follow-ups. Use only credentials belonging to that origin; do not reuse the existing event service's key or balance. An explicit operator-configured production target takes precedence over this development example.
+Divergence uses the same production default as event queries, `https://interface.cournot.ai`. An explicit supported environment override takes precedence. Preserve the same origin for this operation's payment preview, execution, credential setup and account follow-ups, and use only credentials belonging to that origin.
 
 Use default JSON output and save it to a unique local result file. It contains only the current page's `rows_markdown`, `pagination`, and `response.data` with batch timestamps and billing evidence. Raw market items are omitted from this model-facing result. For more than 20 items, the client automatically saves the full sanitized snapshot privately and returns its path in `pagination.snapshot_file`. Do not print or read that full snapshot into model context. `--output markdown` is a rows-only convenience; it omits the pagination and metadata needed for a complete answer. Do not make a second request to recover metadata. Labels are local rendering context and are not sent to the API.
 
