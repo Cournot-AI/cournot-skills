@@ -22,7 +22,7 @@ When `presentation` is returned, use it verbatim as the complete pack-selection 
 node <skill-root>/scripts/cournot-client.mjs topup --pack '<selected pack_id>' --language '<zh or en>'
 ```
 
-Only `p5`, `p20`, `p50` are supported by the current catalog. Dev charges $0.01 per pack according to the backend contract, while the catalog shows the $5/$20/$50 list price; always confirm the actual amount and chain from the fresh server preview. Dev BSC can use real mainnet funds. Do not alter amounts to match the catalog.
+Only `p5`, `p20`, `p50` are supported by the current catalog, with $5/$20/$50 list prices; always confirm the actual amount and chain from the fresh server preview. Mainnet payments use real funds. Do not alter amounts to match the catalog.
 
 Before a confirmed purchase result, describe the pack as containing calls (“includes 600 calls”), not as already credited (“600 calls added”), using the user's language.
 

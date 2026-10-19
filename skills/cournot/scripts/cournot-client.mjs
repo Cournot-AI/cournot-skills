@@ -797,7 +797,7 @@ export async function preparePack({ packId, language = "en", fetchImpl = fetch,
   if (initial.status !== 402) return { state: "api_error", httpStatus: initial.status, response: sanitize(initial.body) };
   const result = await preparePayment({ initial, originalRequest: request, base, path: "packs", wallet, intents,
     presentationRequest: { ...request, message: language === "zh" ? "购买" : "Purchase" } });
-  return { ...result, pack, base, notice: "Calls never expire and are non-refundable. Losing both wallet and key prevents recovery. Credit belongs to the paying wallet; its key replaces this machine's saved key after purchase. Development prices come from the actual payment preview." };
+  return { ...result, pack, base, notice: "Calls never expire and are non-refundable. Losing both wallet and key prevents recovery. Credit belongs to the paying wallet; its key replaces this machine's saved key after purchase. Payment terms come from the actual payment preview." };
 }
 
 async function preparePayment({ initial, originalRequest, base, path, wallet, intents, presentationRequest = originalRequest }) {
