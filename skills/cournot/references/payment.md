@@ -10,7 +10,7 @@ Never display, decode, transform, relay, or place wallet credentials in chat, co
 
 Only start purchase on explicit `/cournot topup` or an unambiguous request to buy a Cournot pack. Merely running out of calls is not authorization.
 
-The pack catalog is bundled with the client, not fetched from the server. Use the returned `base` internally to interpret pricing, without displaying the API environment or origin. Only for `https://dev-interface.cournot.ai`, distinguish catalog list prices from the current $0.01-per-pack charge without labelling it a development environment. In production, show catalog prices without any $0.01-per-pack claim. For other origins, do not infer a discount. The fresh server payment preview controls the actual amount, asset and network; obtain confirmation of those terms before paying. Keep this pricing explanation with the pack choices, before asking for a selection.
+Show the list prices from the client's pack catalog with the pack choices. Use the fresh 402 response for the actual amount, asset and network in every environment, and obtain confirmation of those terms before paying. Keep API origins and environments internal.
 
 ```sh
 node <skill-root>/scripts/cournot-client.mjs packs --language '<zh or en>'
@@ -22,9 +22,9 @@ When `presentation` is returned, use it verbatim as the complete pack-selection 
 node <skill-root>/scripts/cournot-client.mjs topup --pack '<selected pack_id>' --language '<zh or en>'
 ```
 
-Only `p5`, `p20`, `p50` are supported by the current catalog, with $5/$20/$50 list prices; always confirm the actual amount and chain from the fresh server preview. Mainnet payments use real funds. Do not alter amounts to match the catalog.
+The current pack IDs are `starter`, `pro`, and `scale`. If a pack selection or an unsigned preview refers to a retired pack, offer the current catalog and prepare a fresh preview after the user selects a pack. Mainnet payments use real funds.
 
-Before a confirmed purchase result, describe the pack as containing calls (“includes 600 calls”), not as already credited (“600 calls added”), using the user's language.
+Until the purchase is confirmed, describe how many calls the selected pack includes, using the user's language. Report credited calls after confirmed purchase.
 
 Use the shared payment confirmation and execute flow below. Purchase success saves credentials internally and returns the balance and a masked key. Report the save result and any environment override warning. Do not automatically rerun a pending probability or divergence request after topup.
 
@@ -55,7 +55,7 @@ The client returns every merchant route in `serverOptions` and the Binance route
 - If more than one ready option is present, show all ready options and ask the user which one to use.
 - If exactly one is ready, show a compact confirmation without an option/index column or “option 1” in the question. Keep its `displayIndex` internally for execution; ask simply whether the user confirms this payment.
 - Always use the returned `networkLabel` exactly. It combines the friendly chain name, CAIP network identifier, and environment, for example `Base mainnet (eip155:8453, mainnet)`. Show `tokenSymbol` (for example `USD1` or `USDC`) with the full contract address, human-readable amount, estimated USD value when available, balance when available, recipient, and approval requirement.
-- Use `amountLabel` and `balanceLabel` exactly for token quantities. They are normalized by the client: display `0.01 USD1`, never zero-padded forms such as `0.010000000000000000 USD1`.
+- Use `amountLabel` and `balanceLabel` exactly for token quantities. The client formats the charge from the selected 402 route's `amount` and trims trailing zeros.
 - Use `amountUsdLabel` and `balanceUsdLabel` exactly for estimated USD values. Never display raw `amountUsd` or `currentBalanceUsd` values. The client uses two decimal places at or above `$0.01` and six decimal places below `$0.01`.
 - A mainnet payment transfers real assets. Obtain explicit confirmation immediately before execution.
 
@@ -69,7 +69,7 @@ Normally, use the client's normalized labels exactly. If an older client, raw to
 | `eip155:84532` | `Base Sepolia (eip155:84532, testnet)` | `USDC` | 6 |
 | `eip155:56` | `BNB Chain mainnet (eip155:56, mainnet)` | `USD1` | 18 |
 
-For these routes, use the canonical token symbol even when the raw name is `USD Coin` or `World Liberty Financial USD`. Convert an integer base-unit display amount with the listed decimals and trim trailing zeros: `10000` becomes `0.01 USDC`, and `10000000000000000` becomes `0.01 USD1`. Never show those known values as base units.
+For these routes, use the canonical token symbol even when the raw name is `USD Coin` or `World Liberty Financial USD`. Convert the returned integer amount using the listed decimals and trim trailing zeros. For a single probability call, `50000` displays as `0.05 USDC` and `50000000000000000` displays as `0.05 USD1`.
 
 This is display normalization only. Preserve the original network, asset address, integer amount, recipient, route mapping, and payment payload for client validation and signing. For an unknown network or asset, do not guess a symbol or decimals; retain the qualified base-unit value.
 

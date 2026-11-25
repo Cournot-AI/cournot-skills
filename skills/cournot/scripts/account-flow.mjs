@@ -7,9 +7,9 @@ import { validateDivergenceLimit } from "./divergence-flow.mjs";
 export const DEV_BASE = "https://dev-interface.cournot.ai";
 export const PRODUCTION_BASE = "https://interface.cournot.ai";
 export const PACKS = [
-  { pack_id: "p5", name: "Starter", price_usd: 5, calls: 600 },
-  { pack_id: "p20", name: "Standard", price_usd: 20, calls: 2800 },
-  { pack_id: "p50", name: "Scale", price_usd: 50, calls: 8000 },
+  { pack_id: "starter", name: "Starter", price_usd: 25, calls: 550 },
+  { pack_id: "pro", name: "Pro", price_usd: 100, calls: 2400 },
+  { pack_id: "scale", name: "Scale", price_usd: 500, calls: 13000 },
 ];
 
 export function fail(message, code = "INVALID_INPUT") {

@@ -657,7 +657,7 @@ function sanitizePreviewOptions(previewOptions, requirements) {
       tokenSymbol:
         tokenMetadata(option.originalAccept ?? {}).symbol ??
         safeTokenSymbol(option.tokenSymbol),
-      amount: option.amount ?? null,
+      walletAmount: normalizeDecimal(option.amount),
       amountUsd: option.amountUsd ?? null,
       payTo: option.payTo ?? option.originalAccept?.payTo ?? null,
       currentBalance: option.currentBalance ?? null,
@@ -674,11 +674,14 @@ function sanitizePreviewOptions(previewOptions, requirements) {
   return { ready, blockers };
 }
 
-function publicReadyOptions(ready) {
+function publicReadyOptions(ready, serverOptions) {
   return ready.map((option, index) => {
-    const amount = normalizeDecimal(option.amount);
+    const { displayAmount, amountLabel } = serverOptions[option.originalAcceptIndex];
+    const amount = displayAmount ?? option.walletAmount;
     const currentBalance = normalizeDecimal(option.currentBalance);
-    const amountUsd = normalizeDecimal(option.amountUsd);
+    const amountUsd = option.walletAmount === null || option.walletAmount === amount
+      ? normalizeDecimal(option.amountUsd)
+      : null;
     const currentBalanceUsd = normalizeDecimal(option.currentBalanceUsd);
     return {
       displayIndex: index + 1,
@@ -686,10 +689,7 @@ function publicReadyOptions(ready) {
       tokenAddress: option.tokenAddress,
       tokenSymbol: option.tokenSymbol,
       amount,
-      amountLabel:
-        amount == null
-          ? null
-          : `${amount}${option.tokenSymbol ? ` ${option.tokenSymbol}` : ""}`,
+      amountLabel,
       amountUsd,
       amountUsdLabel: formatUsdLabel(amountUsd),
       payTo: option.payTo,
@@ -790,7 +790,7 @@ export async function prepareDivergence({ limit, labels, fetchImpl = fetch,
 export async function preparePack({ packId, language = "en", fetchImpl = fetch,
   wallet = createBinanceWalletRunner(), intents = createFileIntentStore(), base = apiBase() } = {}) {
   const pack = PACKS.find((item) => item.pack_id === String(packId).trim().toLowerCase());
-  if (!pack) fail("Select a valid pack: p5, p20, or p50");
+  if (!pack) fail(`Select a valid pack (${PACKS.map((item) => item.pack_id).join(", ")})`);
   base = apiBase(base);
   const request = { pack_id: pack.pack_id };
   const initial = await apiRequest({ base, path: "packs", method: "POST", body: request, fetchImpl });
@@ -876,7 +876,7 @@ async function preparePayment({ initial, originalRequest, base, path, wallet, in
     base,
     intentId,
     serverOptions,
-    options: publicReadyOptions(ready),
+    options: publicReadyOptions(ready, serverOptions),
     blockers: publicBlockers(blockers),
   };
 }
@@ -950,6 +950,10 @@ export async function executePayment({
   if (intent.kind !== "payment" || intent.base !== apiBase(base) || !["probability", "divergence", "packs"].includes(intent.path)) {
     lease.restore();
     fail("Payment intent belongs to another operation or environment", "INTENT_MISMATCH");
+  }
+  if (intent.path === "packs" && !PACKS.some((pack) => pack.pack_id === intent.request?.pack_id)) {
+    lease.consume();
+    fail("This pack is no longer available. Run /cournot topup to choose a current pack.", "PACK_UNAVAILABLE");
   }
   if (intent.path === "divergence") {
     try {
@@ -1078,13 +1082,12 @@ function decodeRequest(value) {
 function packSelection(language = "en") {
   const base = apiBase();
   const zh = language === "zh";
-  const dev = base === "https://dev-interface.cournot.ai";
   const rows = PACKS.map(pack => `| ${pack.name} (${pack.pack_id}) | ${pack.calls.toLocaleString("en-US")} | $${pack.price_usd} |`).join("\n");
   const presentation = `| ${zh ? "套餐 | 次数 | 目录标价" : "Pack | Calls | List price"} |
 |---|---:|---:|
 ${rows}
 
-${dev ? (zh ? "当前每个套餐收费 $0.01。" : "Each pack currently costs $0.01. ") : ""}${zh ? "实际付款金额、资产和网络以随后展示的最新付款预览为准，确认后才会付款。" : "The latest payment preview determines the actual amount, asset and network; payment requires your confirmation."}
+${zh ? "实际付款金额、资产和网络以随后展示的最新付款预览为准，确认后才会付款。" : "The latest payment preview determines the actual amount, asset and network; payment requires your confirmation."}
 
 ${zh ? "次数永久有效、可叠加，购买后不退款。额度归付款钱包所有；购买成功后会在本机保存该钱包的密钥，可能替换现有密钥。若同时失去钱包访问权和密钥，将无法恢复。主网付款会使用真实资产。" : "Calls never expire, stack, and are non-refundable. Credit belongs to the paying wallet; purchase saves its key on this device and may replace an existing key. Losing both wallet access and the key prevents recovery. Mainnet payments use real assets."}
 

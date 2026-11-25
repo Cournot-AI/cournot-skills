@@ -62,13 +62,13 @@ No key or wallet is needed to start. Keys are stored in a user-level, per-origin
 
 ## Pricing and account commands
 
-Each IP gets three free calls **in total**, shared by probability and divergence, with no reset. Free calls are used before prepaid calls. Once exhausted, choose a pack, import an existing key, or explicitly approve a $0.01 per-call payment. No automatic topup or payment fallback.
+Each IP gets three free calls **in total**, shared by probability and divergence, with no reset. Free calls are used before prepaid calls. Once exhausted, choose a pack, import an existing key, or pay per call. A single probability call costs $0.05 and requires confirmation of the payment preview. No automatic topup or payment fallback.
 
-| Pack | List price | Calls |
-|---|---|---|
-| Starter | $5 | 600 |
-| Standard | $20 | 2,800 |
-| Scale | $50 | 8,000 |
+| Pack | `pack_id` | List price | Calls |
+|---|---|---:|---:|
+| Starter | `starter` | $25 | 550 |
+| Pro | `pro` | $100 | 2,400 |
+| Scale | `scale` | $500 | 13,000 |
 
 Prepaid calls stack, never expire and are non-refundable. The payment preview determines the actual amount, asset and network; mainnet payments use real assets. Catalog changes require updating the skill.
 
